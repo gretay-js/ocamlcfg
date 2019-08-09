@@ -1,0 +1,11 @@
+(executable
+ (name example)
+ (libraries
+        core
+        compiler-libs.common
+        compiler-libs.optcomp
+        ocamlcfg)
+ (preprocess (pps ppx_jane)))
+
+
+(alias (name DEFAULT) (deps example.ml.pp))

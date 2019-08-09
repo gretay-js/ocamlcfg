@@ -1,0 +1,6 @@
+(library
+ (name ocamlcfg)
+ (libraries
+        compiler-libs.common
+        compiler-libs.optcomp)
+ (synopsis "library for building CFG"))
