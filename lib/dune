@@ -1,5 +1,6 @@
 (library
  (name ocamlcfg)
+ (public_name ocamlcfg)
  (libraries
         compiler-libs.common
         compiler-libs.optcomp)

@@ -118,6 +118,13 @@ let write_linear file result =
   let filename = file ^ "-new" in
   Linear_format.write filename result
 
+let print_layout msg layout =
+  if !verbose then begin
+    printf "%s:\n" msg;
+    List.iter ~f:(fun lbl -> printf "%d " lbl) layout;
+    printf "\n"
+  end
+
 let reorder cfg =
   (* Ensure entry exit invariants *)
   let original_layout = Cfg_builder.get_layout cfg in
@@ -126,6 +133,8 @@ let reorder cfg =
     :: List.permute ~random_state:Random.State.default
          (List.tl_exn original_layout)
   in
+  print_layout "orig" original_layout;
+  print_layout "after reorder:"  new_layout;
   Cfg_builder.set_layout cfg new_layout
 
 let transform f ~reorder_blocks ~extra_debug ~validate ~strict =
