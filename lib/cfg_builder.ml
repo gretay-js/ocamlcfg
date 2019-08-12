@@ -22,7 +22,7 @@ module Layout = struct
   type t = label list
 end
 
-let verbose = true
+let verbose = false
 
 type t = {
   (* The graph itself *)

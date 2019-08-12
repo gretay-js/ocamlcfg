@@ -11,8 +11,8 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
-open Core
 open Ocamlcfg
+open Core
 
 let verbose = ref false
 
@@ -100,7 +100,7 @@ let print_linear msg f =
     Format.kasprintf prerr_endline "@;%a" Printlinear.fundecl f )
 
 let process transform file =
-  let open Linear in
+  let open Linear_format in
   let linear_unit_info = read file in
   Cmm.set_label linear_unit_info.last_label;
   let items =
@@ -116,7 +116,7 @@ let process transform file =
 
 let write_linear file result =
   let filename = file ^ "-new" in
-  Linear.write filename result
+  Linear_format.write filename result
 
 let reorder cfg =
   (* Ensure entry exit invariants *)
@@ -151,8 +151,9 @@ let main files ~reorder_blocks ~extra_debug ~validate ~strict =
 let main_command =
   Command.basic
     ~summary:"Demo for building CFG from Linear and block reordering."
+    ~readme:(fun () -> "")
     Command.Let_syntax.(
-      let%map v = flag "-verbose" ~aliases:[ "-v" ] no_arg ~doc:" verbose"
+      let%map_open v = flag "-verbose" ~aliases:[ "-v" ] no_arg ~doc:" verbose"
       and extra_debug =
         flag "-extra-debug" no_arg ~doc:" add extra debug info"
       and reorder_blocks =
@@ -161,7 +162,7 @@ let main_command =
         flag "-validate" no_arg
           ~doc:" check Linear->CFG->Linear is identity"
       and strict = flag "-strict" no_arg ~doc:" stop if validate fails"
-      and files = anon_files in
+      and files = anon (sequence ("input" %: Filename.arg_type)) in
       verbose := v;
       if !verbose && List.is_empty files then printf "No input files\n";
       if strict && not validate then
