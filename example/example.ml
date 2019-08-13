@@ -100,19 +100,21 @@ let print_linear msg f =
     Format.kasprintf prerr_endline "@;%a" Printlinear.fundecl f )
 
 let process transform file =
+  let out_filename = file ^ "-new" in
   let open Linear_format in
-  let linear_unit_info = read file in
-  Cmm.set_label linear_unit_info.last_label;
-  let items =
-    List.map linear_unit_info.items ~f:(function
-      | Func d -> Func { d with decl = transform d.decl }
+  reset ();
+  let linear_unit_info = restore file in
+  List.iter linear_unit_info.items ~f:(fun item ->
       (* CR gyorsh: d.contains_calls may become inaccurate if an
-         optimization deletes calls, for example dead code elimination, but
-         we cannot recompute it, because it is target-dependent:
+         optimization deletes calls, for example dead code elimination,
+         but we cannot recompute it, because it is target-dependent:
          selection.ml can redefine mark_call or mark_c_tailcall. *)
-      | Data d -> Data d)
-  in
-  { linear_unit_info with items }
+      (* CR gyorsh: this won't be needed when fields from Proc move to Func *)
+      restore_item item;
+      match item with
+      | Func d -> transform d.decl |> add_fun
+      | Data d -> Data d |> add_data);
+  save out_filename
 
 let write_linear file result =
   let filename = file ^ "-new" in
@@ -153,9 +155,7 @@ let main files ~reorder_blocks ~extra_debug ~validate ~strict =
   let transform f =
     transform f ~reorder_blocks ~extra_debug ~validate ~strict
   in
-  List.iter files ~f:(fun file ->
-      let result = process transform file in
-      write_linear file result)
+  List.iter files ~f:(process transform)
 
 let main_command =
   Command.basic
