@@ -103,29 +103,24 @@ let process transform file =
   let out_filename = file ^ "-new" in
   let open Linear_format in
   reset ();
-  let linear_unit_info = restore file in
-  List.iter linear_unit_info.items ~f:(fun item ->
+  let items = restore file in
+  List.iter items ~f:(fun item ->
       (* CR gyorsh: d.contains_calls may become inaccurate if an
-         optimization deletes calls, for example dead code elimination,
-         but we cannot recompute it, because it is target-dependent:
+         optimization deletes calls, for example dead code elimination, but
+         we cannot recompute it, because it is target-dependent:
          selection.ml can redefine mark_call or mark_c_tailcall. *)
       (* CR gyorsh: this won't be needed when fields from Proc move to Func *)
       restore_item item;
       match item with
       | Func d -> transform d.decl |> add_fun
-      | Data d -> Data d |> add_data);
+      | Data d -> add_data d);
   save out_filename
 
-let write_linear file result =
-  let filename = file ^ "-new" in
-  Linear_format.write filename result
-
 let print_layout msg layout =
-  if !verbose then begin
+  if !verbose then (
     printf "%s:\n" msg;
     List.iter ~f:(fun lbl -> printf "%d " lbl) layout;
-    printf "\n"
-  end
+    printf "\n" )
 
 let reorder cfg =
   (* Ensure entry exit invariants *)
@@ -136,7 +131,7 @@ let reorder cfg =
          (List.tl_exn original_layout)
   in
   print_layout "orig" original_layout;
-  print_layout "after reorder:"  new_layout;
+  print_layout "after reorder:" new_layout;
   Cfg_builder.set_layout cfg new_layout
 
 let transform f ~reorder_blocks ~extra_debug ~validate ~strict =
@@ -162,7 +157,8 @@ let main_command =
     ~summary:"Demo for building CFG from Linear and block reordering."
     ~readme:(fun () -> "")
     Command.Let_syntax.(
-      let%map_open v = flag "-verbose" ~aliases:[ "-v" ] no_arg ~doc:" verbose"
+      let%map_open v =
+        flag "-verbose" ~aliases:[ "-v" ] no_arg ~doc:" verbose"
       and extra_debug =
         flag "-extra-debug" no_arg ~doc:" add extra debug info"
       and reorder_blocks =
