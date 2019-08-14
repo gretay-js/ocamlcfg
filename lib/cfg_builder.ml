@@ -22,7 +22,7 @@ module Layout = struct
   type t = label list
 end
 
-let verbose = true
+let verbose = false
 
 type t = {
   (* The graph itself *)
@@ -564,8 +564,7 @@ let to_linear_instr ?extra_debug ~i desc next =
   let dbg =
     match extra_debug with
     | None -> i.dbg
-    | Some file ->
-        Extra_debug.add_discriminator i.dbg file i.id
+    | Some file -> Extra_debug.add_discriminator i.dbg file i.id
   in
   { desc; next; arg = i.arg; res = i.res; dbg; live = i.live }
 
@@ -615,13 +614,15 @@ let linearize_terminator ?extra_debug terminator ~next =
             else if label_q = next.label then
               [ Lcondbranch (cond_p, label_p) ]
             else assert false
-        | [ (Test (Iinttest_imm (Iunsigned Clt, 1)), label0);
-            (Test (Iinttest_imm (Iunsigned Ceq, 1)), label1);
-            (Test (Iinttest_imm (Iunsigned Cgt, 1)), label2)
-          ] ->
+        | [
+         (Test (Iinttest_imm (Iunsigned Clt, 1)), label0);
+         (Test (Iinttest_imm (Iunsigned Ceq, 1)), label1);
+         (Test (Iinttest_imm (Iunsigned Cgt, 1)), label2);
+        ] ->
             let find_label l = if next.label = l then None else Some l in
-            [ Lcondbranch3
-                (find_label label0, find_label label1, find_label label2)
+            [
+              Lcondbranch3
+                (find_label label0, find_label label1, find_label label2);
             ]
         | _ -> assert false )
   in
@@ -667,8 +668,10 @@ let adjust_trap t body block pred_block =
 (* CR gyorsh: handle duplicate labels in new layout: print the same block
    more than once. *)
 let to_linear t ~extra_debug =
-  let extra_debug = if extra_debug then
-      Some (Extra_debug.get_linear_file (get_name t)) else None in
+  let extra_debug =
+    if extra_debug then Some (Extra_debug.get_linear_file (get_name t))
+    else None
+  in
   let layout = Array.of_list t.layout in
   let len = Array.length layout in
   let next = ref labelled_insn_end in
