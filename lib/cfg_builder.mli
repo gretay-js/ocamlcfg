@@ -48,3 +48,16 @@ val eliminate_dead_blocks : t -> unit
 
 (* Mutates t inplace and also eliminate dead blocks *)
 val eliminate_fallthrough_blocks : t -> unit
+
+type labelled_insn = {
+  label : label;
+  insn : Linear.instruction;
+}
+
+val labelled_insn_end : labelled_insn
+
+val linearize_terminator :
+  ?extra_debug:string ->
+  Cfg.terminator Cfg.instruction ->
+  next:labelled_insn ->
+  Linear.instruction
