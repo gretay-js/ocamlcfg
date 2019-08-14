@@ -61,3 +61,9 @@ val linearize_terminator :
   Cfg.terminator Cfg.instruction ->
   next:labelled_insn ->
   Linear.instruction
+
+val basic_to_linear :
+  ?extra_debug:string ->
+  Cfg.basic Cfg.instruction ->
+  Linear.instruction ->
+  Linear.instruction
