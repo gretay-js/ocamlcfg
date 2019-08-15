@@ -102,19 +102,11 @@ let print_linear msg f =
 let process transform file =
   let out_filename = file ^ "-new" in
   let open Linear_format in
-  reset ();
-  let items = restore file in
-  List.iter items ~f:(fun item ->
-      (* CR gyorsh: d.contains_calls may become inaccurate if an
-         optimization deletes calls, for example dead code elimination, but
-         we cannot recompute it, because it is target-dependent:
-         selection.ml can redefine mark_call or mark_c_tailcall. *)
-      (* CR gyorsh: this won't be needed when fields from Proc move to Func *)
-      restore_item item;
-      match item with
-      | Func d -> transform d.decl |> add_fun
-      | Data d -> add_data d);
-  save out_filename
+  restore file
+  |> List.map ~f:(function
+       | Func d -> Func (transform d)
+       | Data d -> Data d)
+  |> save out_filename
 
 let print_layout msg layout =
   if !verbose then (
