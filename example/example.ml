@@ -102,11 +102,12 @@ let print_linear msg f =
 let process transform file =
   let out_filename = file ^ "-new" in
   let open Linear_format in
-  restore file
-  |> List.map ~f:(function
-       | Func d -> Func (transform d)
-       | Data d -> Data d)
-  |> save out_filename
+  let ui, _ = restore file in
+  ui.items <-
+    List.map ui.items ~f:(function
+      | Func d -> Func (transform d)
+      | Data d -> Data d);
+  save ~filename:out_filename ui
 
 let print_layout msg layout =
   if !verbose then (
