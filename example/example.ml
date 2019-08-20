@@ -107,7 +107,7 @@ let process transform file =
     List.map ui.items ~f:(function
       | Func d -> Func (transform d)
       | Data d -> Data d);
-  save ~filename:out_filename ui
+  save out_filename ui
 
 let print_layout msg layout =
   if !verbose then (
