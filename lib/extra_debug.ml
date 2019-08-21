@@ -43,7 +43,7 @@ let to_symbol name =
 
 (* let to_symbol name = name *)
 
-let linear_ext = ".linear"
+let linear_ext = ".cmir-linear"
 
 let _add_linear_discriminators (f : Linear.fundecl) entry_id =
   (* Best guess for filename based on compilation unit name, because dwarf
@@ -61,8 +61,8 @@ let get_linear_file fun_name = to_symbol fun_name ^ linear_ext
 let rec remove_discriminator = function
   | [] -> []
   | item :: t ->
-    if Filename.extension item.Debuginfo.dinfo_file = linear_ext then t
-    else item :: remove_discriminator t
+      if Filename.extension item.Debuginfo.dinfo_file = linear_ext then t
+      else item :: remove_discriminator t
 
 let rec remove_linear_discriminator i =
   let open Linear in
