@@ -51,7 +51,7 @@ type t = {
   mutable preserve_orig_labels : bool;
 }
 
-(* CR gyorsh: new_labels and split_labels aren't used any more. *)
+(* CR-soon gyorsh: new_labels and split_labels aren't used any more. *)
 
 let entry_label t = t.cfg.entry_label
 
@@ -100,7 +100,7 @@ let get_new_linear_id () =
 (* (* All labels have id 0 because cfg operations can create new labels,
  *    whereas ids of basic block instructions do not change. *)
  * (* New terminators introduced by block reordering can also get id=0. *)
- * (* CR: make id into an abstract type to distinguish special cases of new ids
+ * (* CR-soon gyorsh: make id into an abstract type to distinguish special cases of new ids
  *    explicitly. *)
  * let label_id = 0
  *
@@ -319,7 +319,7 @@ let rec create_blocks t i block ~trap_depth =
         register t block );
 
       (* Start a new block *)
-      (* CR gyorsh: check for multpile consecutive labels *)
+      (* CR-soon gyorsh: check for multpile consecutive labels *)
       record_trap_depth_at_label t start ~trap_depth;
       let new_block = create_empty_block t start in
       create_blocks t i.next new_block ~trap_depth
@@ -350,8 +350,8 @@ let rec create_blocks t i block ~trap_depth =
       add_terminator (Branch successors);
       create_blocks t i.next block ~trap_depth
   | Lcondbranch (cond, lbl) ->
-      (* CR gyorsh: merge (Lbranch | Lcondbranch | Lcondbranch3)+ into a
-         single terminator when the argments are the same. Enables
+      (* CR-soon gyorsh: merge (Lbranch | Lcondbranch | Lcondbranch3)+ into
+         a single terminator when the argments are the same. Enables
          reordering of branch instructions and save cmp instructions. The
          main problem is that it involves boolean combination of
          conditionals of type Mach.test that can arise from a sequence of
@@ -388,8 +388,8 @@ let rec create_blocks t i block ~trap_depth =
       add_terminator (Branch [ s0; s1; s2 ]);
       create_blocks t fallthrough.insn block ~trap_depth
   | Lswitch labels ->
-      (* CR gyorsh: get rid of switches entirely and re-generate them based
-         on optimization and perf data? *)
+      (* CR-soon gyorsh: get rid of switches entirely and re-generate them
+         based on optimization and perf data? *)
       add_terminator (Switch labels);
       Array.iter (record_trap_depth_at_label t ~trap_depth) labels;
       assert (has_label i.next);
@@ -529,9 +529,9 @@ let compute_id_to_label t =
 
 let from_linear (f : Linear.fundecl) ~preserve_orig_labels =
   let t = make_empty_cfg f.fun_name ~preserve_orig_labels in
-  (* CR gyorsh: label of the function entry must not conflict with existing
-     labels. Relies on the invariant: Cmm.new_label() is int > 99. An
-     alternative is to create a new type for label here, but it is less
+  (* CR-soon gyorsh: label of the function entry must not conflict with
+     existing labels. Relies on the invariant: Cmm.new_label() is int > 99.
+     An alternative is to create a new type for label here, but it is less
      efficient because label is used as a key to Hashtble. *)
   let entry_block = create_empty_block t t.cfg.entry_label in
   last_linear_id := entry_id;
@@ -539,7 +539,7 @@ let from_linear (f : Linear.fundecl) ~preserve_orig_labels =
 
   (* Register predecessors now rather than during cfg construction, because
      of forward jumps: the blocks do not exist when the jump that reference
-     them is processed. CR gyorsh: combine with dead block elimination. *)
+     them is processed. CR-soon gyorsh: combine with dead block elimination. *)
   register_predecessors t;
   register_split_labels t;
   compute_id_to_label t;
@@ -602,7 +602,7 @@ let linearize_terminator ?extra_debug terminator ~next =
                  ] *) )
             else if label_p = next.label && label_q = next.label then []
             else if label_p <> next.label && label_q <> next.label then
-              (* CR gyorsh: if both label are not fall through, then
+              (* CR-soon gyorsh: if both label are not fall through, then
                  arrangement should depend on perf data and possibly the
                  relative position of the target labels and the current
                  block: whether the jumps are forward or back. This
@@ -642,7 +642,7 @@ let need_label t block pred_block =
 
     (* No need for the label, unless the predecessor's terminator is switch
        and then the label is needed for the jump table. *)
-    (* CR gyorsh: is this correct with label_after for calls? *)
+    (* CR-soon gyorsh: is this correct with label_after for calls? *)
     match pred_block.terminator.desc with
     | Switch _ -> true
     | Branch _ ->
@@ -665,8 +665,8 @@ let adjust_trap t body block pred_block =
     make_simple_linear (Ladjust_trap_depth { delta_traps }) body
   else body
 
-(* CR gyorsh: handle duplicate labels in new layout: print the same block
-   more than once. *)
+(* CR-soon gyorsh: handle duplicate labels in new layout: print the same
+   block more than once. *)
 let to_linear t ~extra_debug =
   let extra_debug =
     if extra_debug then Some (Extra_debug.get_linear_file (get_name t))
@@ -711,9 +711,10 @@ let print oc t =
       (linearize_terminator ?extra_debug ~next:labelled_insn_end)
 
 (* Simplify CFG *)
-(* CR gyorsh: needs more testing. *)
+(* CR-soon gyorsh: needs more testing. *)
 
-(* CR gyorsh: eliminate transitively blocks that become dead from this one. *)
+(* CR-soon gyorsh: eliminate transitively blocks that become dead from this
+   one. *)
 let eliminate_dead_block t dead_blocks label =
   let block = Hashtbl.find t.cfg.blocks label in
   Hashtbl.remove t.cfg.blocks label;
@@ -748,8 +749,8 @@ let eliminate_dead_block t dead_blocks label =
      accessed if found in the cfg, but remove for consistency. *)
   Hashtbl.remove t.trap_depths label;
 
-  (* Return updated list of eliminated blocks. CR gyorsh: update this when
-     transitively eliminate blocks. *)
+  (* Return updated list of eliminated blocks. CR-soon gyorsh: update this
+     when transitively eliminate blocks. *)
   label :: dead_blocks
 
 (* Must be called after predecessors are registered and split labels are
@@ -793,8 +794,8 @@ let simplify_terminator block =
          successors, except successors that share the same label target are
          grouped. *)
       (* Map label to list of conditions that target it. *)
-      (* CR gyorsh: pairwise join of conditions is not canonical, because
-         some joins are not representable as a condition. *)
+      (* CR-soon gyorsh: pairwise join of conditions is not canonical,
+         because some joins are not representable as a condition. *)
       let map =
         List.fold_left
           (fun map (c, l) ->
@@ -957,16 +958,16 @@ let eliminate_fallthrough_blocks t =
   Hashtbl.iter (fun _ b -> simplify_terminator b) t.cfg.blocks;
   loop ()
 
-(* CR gyorsh: implement CFG traversal *)
-(* CR gyorsh: abstraction of cfg updates that transparently and efficiently
-   keeps predecessors and successors in sync. For example, change successors
-   relation should automatically updates the predecessors relation without
-   recomputing them from scratch. *)
+(* CR-soon gyorsh: implement CFG traversal *)
+(* CR-soon gyorsh: abstraction of cfg updates that transparently and
+   efficiently keeps predecessors and successors in sync. For example,
+   change successors relation should automatically updates the predecessors
+   relation without recomputing them from scratch. *)
 
-(* CR gyorsh: Optimize terminators. Implement switch as jump table or as a
-   sequence of branches depending on perf counters and layout. It should be
-   implemented as a separate transformation on the cfg, that needs to be
-   informated by the layout, but it should not be done while emitting
+(* CR-soon gyorsh: Optimize terminators. Implement switch as jump table or
+   as a sequence of branches depending on perf counters and layout. It
+   should be implemented as a separate transformation on the cfg, that needs
+   to be informated by the layout, but it should not be done while emitting
    linear. This way we can keep to_linear as simple as possible to ensure
    basic invariants are preserved, while other optimizations can be turned
    on and off.*)

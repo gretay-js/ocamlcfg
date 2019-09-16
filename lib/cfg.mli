@@ -21,7 +21,7 @@ type label = Linear.label
 
 module LabelSet : Set.S with type elt = label
 
-(* CR gyorsh: store label after separately and update after reordering. *)
+(* CR-soon gyorsh: store label after separately and update after reordering. *)
 type func_call_operation =
   | Indirect of { label_after : label }
   | Immediate of {
@@ -99,8 +99,8 @@ and 'a instruction = {
   dbg : Debuginfo.t;
   live : Reg.Set.t;
   trap_depth : int;
-  (* CR: make id into an abstract type to distinguish special cases of new
-     ids explicitly. *)
+  (* CR-soon gyorsh: make id into an abstract type to distinguish special
+     cases of new ids explicitly. *)
   id : int;
 }
 
@@ -120,7 +120,7 @@ and terminator =
   | Raise of Cmm.raise_kind
   | Tailcall of func_call_operation
 
-(* CR gyorsh: Switch can be translated to Branch. *)
+(* CR-soon gyorsh: Switch can be translated to Branch. *)
 (* Control Flow Graph of a function. *)
 type t = {
   blocks : (label, block) Hashtbl.t;
@@ -139,10 +139,11 @@ val print :
   out_channel ->
   t ->
   label list ->
-  linearize_basic:(basic instruction ->
-                  (* next, but not labeling the argument for easier fold *)
-                  Linear.instruction ->
-                  Linear.instruction) ->
+  linearize_basic:
+    (basic instruction ->
+    (* next, but not labeling the argument for easier fold *)
+    Linear.instruction ->
+    Linear.instruction) ->
   linearize_terminator:(terminator instruction -> Linear.instruction) ->
   unit
 

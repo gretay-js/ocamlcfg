@@ -25,7 +25,7 @@ module LabelSet = Set.Make (struct
   let compare (x : t) y = compare x y
 end)
 
-(* CR gyorsh: store label after separately and update after reordering. *)
+(* CR-soon gyorsh: store label after separately and update after reordering. *)
 type func_call_operation =
   | Indirect of { label_after : label }
   | Immediate of {
@@ -88,8 +88,8 @@ type condition =
 
 type successor = condition * label
 
-(* CR gyorsh: Switch has successors but currently no way to attach User_data
-   to them. Can be fixed by translating Switch to Branch. *)
+(* CR-soon gyorsh: Switch has successors but currently no way to attach
+   User_data to them. Can be fixed by translating Switch to Branch. *)
 
 (* basic block *)
 type block = {
@@ -188,7 +188,7 @@ let print_block ppf label b ~linearize_basic ~linearize_terminator =
   Format.fprintf ppf "\nsuccessors:";
   List.iter (fun l -> Format.fprintf ppf " %d" l) (successor_labels b)
 
-(* CR gyorsh: add dot format output *)
+(* CR-soon gyorsh: add dot format output *)
 let print oc cfg layout ~linearize_basic ~linearize_terminator =
   let ppf = Format.formatter_of_out_channel oc in
   Printf.fprintf oc "\n%s\n" cfg.fun_name;
