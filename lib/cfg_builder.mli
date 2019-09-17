@@ -34,6 +34,8 @@ val is_trap_handler : t -> label -> bool
 
 val get_name : t -> string
 
+val successor_labels : t -> Cfg.block -> label list
+
 val preserve_orig_labels : t -> bool
 
 val id_to_label : t -> int -> label option
@@ -56,6 +58,7 @@ type labelled_insn = {
 val labelled_insn_end : labelled_insn
 
 val linearize_terminator :
+  t ->
   ?extra_debug:string ->
   Cfg.terminator Cfg.instruction ->
   next:labelled_insn ->

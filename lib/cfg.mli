@@ -29,6 +29,10 @@ type func_call_operation =
       label_after : label;
     }
 
+type tail_call_operation =
+  | Self of { label_after : label }
+  | Func of func_call_operation
+
 type prim_call_operation =
   | External of {
       func : string;
@@ -118,21 +122,25 @@ and terminator =
   | Switch of label array
   | Return
   | Raise of Cmm.raise_kind
-  | Tailcall of func_call_operation
+  | Tailcall of tail_call_operation
 
 (* CR-soon gyorsh: Switch can be translated to Branch. *)
 (* Control Flow Graph of a function. *)
 type t = {
-  blocks : (label, block) Hashtbl.t;
   (* Map labels to blocks *)
-  fun_name : string;
+  blocks : (label, block) Hashtbl.t;
   (* Function name, used for printing messages *)
-  entry_label : label; (* Must be first in all layouts of this cfg. *)
+  fun_name : string;
+  (* Must be first in all layouts of this cfg. *)
+  entry_label : label;
+  (* Without prologue, this is the same as entry_label. Otherwise, prologue
+     falls through to tailrec_entry. *)
+  fun_tailrec_entry_point_label : label;
 }
 
-val successors : block -> successor list
+val successors : t -> block -> successor list
 
-val successor_labels : block -> label list
+val successor_labels : t -> block -> label list
 
 (* Debug printing *)
 val print :

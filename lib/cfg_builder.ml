@@ -65,6 +65,8 @@ let set_layout t new_layout =
 
 let get_name t = t.cfg.fun_name
 
+let successor_labels t block = Cfg.successor_labels t.cfg block
+
 let id_to_label t id =
   match Numbers.Int.Map.find_opt id t.id_to_label with
   | None ->
@@ -158,7 +160,7 @@ let register t block =
 let register_predecessors t =
   Hashtbl.iter
     (fun label block ->
-      let targets = successor_labels block in
+      let targets = successor_labels t block in
       List.iter
         (fun target ->
           let target_block = Hashtbl.find t.cfg.blocks target in
@@ -324,12 +326,15 @@ let rec create_blocks t i block ~trap_depth =
       let new_block = create_empty_block t start in
       create_blocks t i.next new_block ~trap_depth
   | Lop (Itailcall_ind { label_after }) ->
-      let desc = Tailcall (Indirect { label_after }) in
+      let desc = Tailcall (Func (Indirect { label_after })) in
       assert (has_label i.next);
       add_terminator desc;
       create_blocks t i.next block ~trap_depth
   | Lop (Itailcall_imm { func; label_after }) ->
-      let desc = Tailcall (Immediate { func; label_after }) in
+      let desc =
+        if func = t.cfg.fun_name then Tailcall (Self { label_after })
+        else Tailcall (Func (Immediate { func; label_after }))
+      in
       assert (has_label i.next);
       add_terminator desc;
       create_blocks t i.next block ~trap_depth
@@ -496,10 +501,12 @@ let rec create_blocks t i block ~trap_depth =
       block.body <- create_instr desc i ~trap_depth :: block.body;
       create_blocks t i.next block ~trap_depth
 
-let make_empty_cfg name ~preserve_orig_labels =
+let make_empty_cfg fun_name fun_tailrec_entry_point_label
+    ~preserve_orig_labels =
   let cfg =
     {
-      fun_name = name;
+      fun_name;
+      fun_tailrec_entry_point_label;
       entry_label = 0;
       blocks : (label, block) Hashtbl.t = Hashtbl.create 31;
     }
@@ -528,7 +535,10 @@ let compute_id_to_label t =
   t.id_to_label <- List.fold_left fold_block Numbers.Int.Map.empty t.layout
 
 let from_linear (f : Linear.fundecl) ~preserve_orig_labels =
-  let t = make_empty_cfg f.fun_name ~preserve_orig_labels in
+  let t =
+    make_empty_cfg f.fun_name f.fun_tailrec_entry_point_label
+      ~preserve_orig_labels
+  in
   (* CR-soon gyorsh: label of the function entry must not conflict with
      existing labels. Relies on the invariant: Cmm.new_label() is int > 99.
      An alternative is to create a new type for label here, but it is less
@@ -572,15 +582,17 @@ let basic_to_linear ?extra_debug i next =
   let desc = from_basic i.desc in
   to_linear_instr desc next ~i ?extra_debug
 
-let linearize_terminator ?extra_debug terminator ~next =
+let linearize_terminator t ?extra_debug terminator ~next =
   let desc_list =
     match terminator.desc with
     | Return -> [ Lreturn ]
     | Raise kind -> [ Lraise kind ]
-    | Tailcall (Indirect { label_after }) ->
+    | Tailcall (Func (Indirect { label_after })) ->
         [ Lop (Itailcall_ind { label_after }) ]
-    | Tailcall (Immediate { func; label_after }) ->
+    | Tailcall (Func (Immediate { func; label_after })) ->
         [ Lop (Itailcall_imm { func; label_after }) ]
+    | Tailcall (Self { label_after }) ->
+        [ Lop (Itailcall_imm { func = t.cfg.fun_name; label_after }) ]
     | Switch labels -> [ Lswitch labels ]
     | Branch successors -> (
         match successors with
@@ -682,7 +694,7 @@ let to_linear t ~extra_debug =
     let block = Hashtbl.find t.cfg.blocks label in
     assert (label = block.start);
     let terminator =
-      linearize_terminator ?extra_debug block.terminator ~next:!next
+      linearize_terminator t ?extra_debug block.terminator ~next:!next
     in
     let body =
       List.fold_right (basic_to_linear ?extra_debug) block.body terminator
@@ -708,7 +720,7 @@ let print oc t =
   Cfg.print oc t.cfg t.layout
     ~linearize_basic:(basic_to_linear ?extra_debug)
     ~linearize_terminator:
-      (linearize_terminator ?extra_debug ~next:labelled_insn_end)
+      (linearize_terminator t ?extra_debug ~next:labelled_insn_end)
 
 (* Simplify CFG *)
 (* CR-soon gyorsh: needs more testing. *)
@@ -726,7 +738,7 @@ let eliminate_dead_block t dead_blocks label =
       (* Remove label from predecessors of target. *)
       target_block.predecessors <-
         LabelSet.remove label target_block.predecessors)
-    (successor_labels block);
+    (successor_labels t block);
 
   (* Remove from layout and other data-structures that track labels. *)
   t.layout <- List.filter (fun l -> l <> label) t.layout;
@@ -908,7 +920,7 @@ let rec disconnect_fallthrough_blocks t =
   let found =
     Hashtbl.fold
       (fun label block found ->
-        let successors_labels = successor_labels block in
+        let successors_labels = successor_labels t block in
         if
           t.cfg.entry_label <> label
           (* not entry block *)

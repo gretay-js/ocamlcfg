@@ -33,6 +33,10 @@ type func_call_operation =
       label_after : label;
     }
 
+type tail_call_operation =
+  | Self of { label_after : label }
+  | Func of func_call_operation
+
 type prim_call_operation =
   | External of {
       func : string;
@@ -123,22 +127,27 @@ and terminator =
   | Switch of label array
   | Return
   | Raise of Cmm.raise_kind
-  | Tailcall of func_call_operation
+  | Tailcall of tail_call_operation
 
 (* Control Flow Graph of a function. *)
 type t = {
-  blocks : (label, block) Hashtbl.t;
   (* Map labels to blocks *)
-  fun_name : string;
+  blocks : (label, block) Hashtbl.t;
   (* Function name, used for printing messages *)
-  entry_label : label; (* Must be first in all layouts of this cfg. *)
+  fun_name : string;
+  (* Must be first in all layouts of this cfg. *)
+  entry_label : label;
+  (* Without prologue, this is the same as entry_label. Otherwise, prologue
+     falls through to tailrec_entry. *)
+  fun_tailrec_entry_point_label : label;
 }
 
-let successors block =
+let successors t block =
   match block.terminator.desc with
   | Branch successors -> successors
   | Return -> []
   | Raise _ -> []
+  | Tailcall (Self _) -> [ (Always, t.fun_tailrec_entry_point_label) ]
   | Tailcall _ -> []
   | Switch labels ->
       Array.mapi
@@ -146,8 +155,8 @@ let successors block =
         labels
       |> Array.to_list
 
-let successor_labels block =
-  let _, labels = List.split (successors block) in
+let successor_labels t block =
+  let _, labels = List.split (successors t block) in
   labels
 
 let print_terminator ppf ti =
@@ -173,7 +182,7 @@ let print_terminator ppf ti =
   | Raise _ -> Format.fprintf ppf "Raise\n"
   | Tailcall _ -> Format.fprintf ppf "Tailcall\n"
 
-let print_block ppf label b ~linearize_basic ~linearize_terminator =
+let print_block t ppf label b ~linearize_basic ~linearize_terminator =
   Format.fprintf ppf "\n%d:\n" label;
   let i = List.fold_right linearize_basic b.body Linear.end_instr in
   Printlinear.instr ppf i;
@@ -186,7 +195,7 @@ let print_block ppf label b ~linearize_basic ~linearize_terminator =
   Format.fprintf ppf "\npredecessors:";
   LabelSet.iter (fun l -> Format.fprintf ppf " %d" l) b.predecessors;
   Format.fprintf ppf "\nsuccessors:";
-  List.iter (fun l -> Format.fprintf ppf " %d" l) (successor_labels b)
+  List.iter (fun l -> Format.fprintf ppf " %d" l) (successor_labels t b)
 
 (* CR-soon gyorsh: add dot format output *)
 let print oc cfg layout ~linearize_basic ~linearize_terminator =
@@ -197,5 +206,5 @@ let print oc cfg layout ~linearize_basic ~linearize_terminator =
   List.iter
     (fun label ->
       let b = Hashtbl.find cfg.blocks label in
-      print_block ppf label b ~linearize_basic ~linearize_terminator)
+      print_block cfg ppf label b ~linearize_basic ~linearize_terminator)
     layout
