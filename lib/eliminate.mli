@@ -11,42 +11,8 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
-(* Control Flow Graph of a function. *)
-type t
+(* Mutates t inplace *)
+val dead_blocks : Cfg_builder.t -> unit
 
-val get_block : t -> label -> Cfg.block option
-
-val get_layout : t -> Layout.t
-
-val set_layout : t -> Layout.t -> t
-
-val is_trap_handler : t -> label -> bool
-
-val get_name : t -> string
-
-val preserve_orig_labels : t -> bool
-
-val id_to_label : t -> int -> label option
-
-val entry_label : t -> label
-
-val print : out_channel -> t -> unit
-
-type labelled_insn = {
-  label : label;
-  insn : Linear.instruction;
-}
-
-val labelled_insn_end : labelled_insn
-
-val linearize_terminator :
-  ?extra_debug:string ->
-  Cfg.terminator Cfg.instruction ->
-  next:labelled_insn ->
-  Linear.instruction
-
-val basic_to_linear :
-  ?extra_debug:string ->
-  Cfg.basic Cfg.instruction ->
-  Linear.instruction ->
-  Linear.instruction
+(* Mutates t inplace and also eliminate dead blocks *)
+val fallthrough_blocks : Cfg_builder.t -> unit
