@@ -14,71 +14,9 @@
 [@@@ocaml.warning "+a-4-30-40-41-42-44-45"]
 
 open Linear
-open Cfg
-
-type label = Linear.label
-
-module Layout = struct
-  type t = label list
-end
+open Cfg_builder
 
 let verbose = false
-
-type t = {
-  (* The graph itself *)
-  cfg : Cfg.t;
-  (* Original layout: linear order of blocks. *)
-  mutable layout : Layout.t;
-  (* Map labels to trap depths. Required for linearize. *)
-  trap_depths : (label, int) Hashtbl.t;
-  (* Maps trap handler block label [L] to the label of the block where the
-     "Lpushtrap L" reference it. Used for dead block elimination. This
-     mapping is one to one, but the reverse is not, because a block might
-     contain multiple Lpushtrap, which is not a terminator. *)
-  trap_labels : (label, label) Hashtbl.t;
-  (* Map id of instruction to label of the block that contains the
-     instruction. Used for mapping perf data back to linear IR. *)
-  mutable id_to_label : label Numbers.Int.Map.t;
-  (* Set for validation, unset for optimization. *)
-  mutable preserve_orig_labels : bool;
-}
-
-(* CR-soon gyorsh: new_labels and split_labels aren't used any more. *)
-
-let entry_label t = t.cfg.entry_label
-
-let get_block t label = Hashtbl.find_opt t.cfg.blocks label
-
-let get_layout t = t.layout
-
-let set_layout t new_layout =
-  t.layout <- new_layout;
-  t
-
-let get_name t = t.cfg.fun_name
-
-let id_to_label t id =
-  match Numbers.Int.Map.find_opt id t.id_to_label with
-  | None ->
-      Printf.fprintf stderr "id_to_label map: \n";
-      Numbers.Int.Map.iter
-        (fun id lbl -> Printf.printf "(%d,%d) " id lbl)
-        t.id_to_label;
-      Printf.fprintf stderr "\n";
-      failwith (Printf.sprintf "Cannot find label for id %d in map\n" id)
-  | Some lbl ->
-      if verbose then
-        Printf.printf "Found label %d for id %d in map\n" lbl id;
-      Some lbl
-
-let preserve_orig_labels t = t.preserve_orig_labels
-
-type labelled_insn = {
-  label : label;
-  insn : Linear.instruction;
-}
-
-let labelled_insn_end = { label = -1; insn = end_instr }
 
 let entry_id = 1
 
@@ -88,6 +26,17 @@ let get_new_linear_id () =
   let id = !last_linear_id in
   last_linear_id := id + 1;
   id
+
+(* All labels have id 0 because cfg operations can create new labels,
+   whereas ids of basic block instructions do not change. *)
+(* New terminators introduced by block reordering can also get id=0. *)
+(* CR-soon gyorsh: make id into an abstract type to distinguish special
+   cases of new ids explicitly. *)
+
+(* From 4.08, LPrologue is added to fun_body, so there is no need to make an
+   id for fun_dbg, and no need to use prolog_id instead of entry_id in
+   add_linear_discriminators. *)
+(* let prolog_id = 1 *)
 
 let create_empty_instruction ?(trap_depth = 0) desc =
   {
@@ -478,351 +427,25 @@ let make_empty_cfg name ~preserve_orig_labels =
     cfg;
     trap_labels : (label, label) Hashtbl.t = Hashtbl.create 7;
     trap_depths : (label, int) Hashtbl.t = Hashtbl.create 31;
-    new_labels = LabelSet.empty;
-    split_labels : (label, Layout.t) Hashtbl.t = Hashtbl.create 7;
     layout = [];
-    id_to_label = Numbers.Int.Map.empty;
     preserve_orig_labels;
   }
 
-let compute_id_to_label t =
-  let fold_block map label =
-    let block = Hashtbl.find t.cfg.blocks label in
-    let new_map =
-      List.fold_left
-        (fun map i -> Numbers.Int.Map.add i.id label map)
-        map block.body
-    in
-    Numbers.Int.Map.add block.terminator.id label new_map
-  in
-  t.id_to_label <- List.fold_left fold_block Numbers.Int.Map.empty t.layout
+let run (f : Linear.fundecl) ~preserve_orig_labels =
+  let t = make_empty_cfg f.fun_name ~preserve_orig_labels in
+  (* CR-soon gyorsh: label of the function entry must not conflict with
+     existing labels. Relies on the invariant: Cmm.new_label() is int > 99.
+     An alternative is to create a new type for label here, but it is less
+     efficient because label is used as a key to Hashtble. *)
+  let entry_block = create_empty_block t t.cfg.entry_label in
+  last_linear_id := entry_id;
+  create_blocks t f.fun_body entry_block ~trap_depth:0;
 
-let from_linear (f : Linear.fundecl) ~preserve_orig_labels =
-  Linear_to_cfg.run f ~preserve_orig_labels
+  (* Register predecessors now rather than during cfg construction, because
+     of forward jumps: the blocks do not exist when the jump that reference
+     them is processed. CR-soon gyorsh: combine with dead block elimination. *)
+  register_predecessors t;
 
-(* Set desc and next from inputs and the rest is empty *)
-let make_simple_linear desc next =
-  {
-    desc;
-    next;
-    arg = [||];
-    res = [||];
-    dbg = Debuginfo.none;
-    live = Reg.Set.empty;
-  }
-
-(* Set desc and next from inputs and copy the rest from i *)
-let to_linear_instr ?extra_debug ~i desc next =
-  let dbg =
-    match extra_debug with
-    | None -> i.dbg
-    | Some file -> Extra_debug.add_discriminator i.dbg file i.id
-  in
-  { desc; next; arg = i.arg; res = i.res; dbg; live = i.live }
-
-let basic_to_linear ?extra_debug i next =
-  let desc = from_basic i.desc in
-  to_linear_instr desc next ~i ?extra_debug
-
-let linearize_terminator ?extra_debug terminator ~next =
-  let desc_list =
-    match terminator.desc with
-    | Return -> [ Lreturn ]
-    | Raise kind -> [ Lraise kind ]
-    | Tailcall (Indirect { label_after }) ->
-        [ Lop (Itailcall_ind { label_after }) ]
-    | Tailcall (Immediate { func; label_after }) ->
-        [ Lop (Itailcall_imm { func; label_after }) ]
-    | Switch labels -> [ Lswitch labels ]
-    | Branch successors -> (
-        match successors with
-        | [] ->
-            if verbose then Printf.printf "next label is %d\n" next.label;
-            failwith "Branch without successors"
-        | [ (Always, label) ] ->
-            if next.label = label then [] else [ Lbranch label ]
-        | [ (Test _, _) ] -> failwith "Successors not exhastive"
-        | [ (Test cond_p, label_p); (Test cond_q, label_q) ] ->
-            if not (cond_p = invert_test cond_q) then (
-              Printf.fprintf stderr
-                "Cannot linearize branch with non-invert:\n";
-              Cfg.print_terminator
-                (Format.formatter_of_out_channel stderr)
-                terminator;
-              failwith "Illegal successors"
-              (* [Lcondbranch(cond_p,label_p); Lcondbranch(cond_q,label_q);
-                 ] *) )
-            else if label_p = next.label && label_q = next.label then []
-            else if label_p <> next.label && label_q <> next.label then
-              (* CR-soon gyorsh: if both label are not fall through, then
-                 arrangement should depend on perf data and possibly the
-                 relative position of the target labels and the current
-                 block: whether the jumps are forward or back. This
-                 information can be obtained from layout but it needs to be
-                 made accessible here. *)
-              [ Lcondbranch (cond_p, label_p); Lbranch label_q ]
-            else if label_p = next.label then
-              [ Lcondbranch (cond_q, label_q) ]
-            else if label_q = next.label then
-              [ Lcondbranch (cond_p, label_p) ]
-            else assert false
-        | [
-         (Test (Iinttest_imm (Iunsigned Clt, 1)), label0);
-         (Test (Iinttest_imm (Iunsigned Ceq, 1)), label1);
-         (Test (Iinttest_imm (Iunsigned Cgt, 1)), label2);
-        ] ->
-            let find_label l = if next.label = l then None else Some l in
-            [
-              Lcondbranch3
-                (find_label label0, find_label label1, find_label label2);
-            ]
-        | _ -> assert false )
-  in
-  List.fold_right
-    (to_linear_instr ?extra_debug ~i:terminator)
-    desc_list next.insn
-
-let need_label t block pred_block =
-  (* Can we drop the start label for this block or not? *)
-  if block.predecessors = LabelSet.singleton pred_block.start then (
-    (* This block has a single predecessor which appears in the layout
-       immediately prior to this block. *)
-    if is_trap_handler t block.start then
-      failwith
-        (Printf.sprintf "Fallthrough from %d to trap handler %d\n"
-           pred_block.start block.start);
-
-    (* No need for the label, unless the predecessor's terminator is switch
-       and then the label is needed for the jump table. *)
-    (* CR-soon gyorsh: is this correct with label_after for calls? *)
-    match pred_block.terminator.desc with
-    | Switch _ -> true
-    | Branch _ ->
-        (* If label is original, preserve it for checking that linear to cfg
-           and back is identity, and for various assertions in reorder. *)
-        if
-          LabelSet.mem block.start t.new_labels
-          || not t.preserve_orig_labels
-        then false
-        else true
-    | _ -> assert false )
-  else true
-
-let adjust_trap t body block pred_block =
-  (* Adjust trap depth *)
-  let block_trap_depth = Hashtbl.find t.trap_depths block.start in
-  let pred_trap_depth = pred_block.terminator.trap_depth in
-  if block_trap_depth != pred_trap_depth then
-    let delta_traps = block_trap_depth - pred_trap_depth in
-    make_simple_linear (Ladjust_trap_depth { delta_traps }) body
-  else body
-
-(* CR-soon gyorsh: handle duplicate labels in new layout: print the same
-   block more than once. *)
-let to_linear t ~extra_debug =
-  let extra_debug =
-    if extra_debug then Some (Extra_debug.get_linear_file (get_name t))
-    else None
-  in
-  let layout = Array.of_list t.layout in
-  let len = Array.length layout in
-  let next = ref labelled_insn_end in
-  for i = len - 1 downto 0 do
-    let label = layout.(i) in
-    if not (Hashtbl.mem t.cfg.blocks label) then
-      failwith (Printf.sprintf "Unknown block labelled %d\n" label);
-    let block = Hashtbl.find t.cfg.blocks label in
-    assert (label = block.start);
-    let terminator =
-      linearize_terminator ?extra_debug block.terminator ~next:!next
-    in
-    let body =
-      List.fold_right (basic_to_linear ?extra_debug) block.body terminator
-    in
-    let insn =
-      if i = 0 then body (* Entry block of the function. Don't add label. *)
-      else
-        let pred = layout.(i - 1) in
-        let pred_block = Hashtbl.find t.cfg.blocks pred in
-        let body =
-          if need_label t block pred_block then
-            make_simple_linear (Llabel block.start) body
-          else body
-        in
-        adjust_trap t body block pred_block
-    in
-    next := { label; insn }
-  done;
-  !next.insn
-
-let print oc t =
-  let extra_debug = None in
-  Cfg.print oc t.cfg t.layout
-    ~linearize_basic:(basic_to_linear ?extra_debug)
-    ~linearize_terminator:
-      (linearize_terminator ?extra_debug ~next:labelled_insn_end)
-
-(* Simplify CFG *)
-(* CR-soon gyorsh: needs more testing. *)
-
-(* CR-soon gyorsh: eliminate transitively blocks that become dead from this
-   one. *)
-let eliminate_dead_block t dead_blocks label =
-  let block = Hashtbl.find t.cfg.blocks label in
-  Hashtbl.remove t.cfg.blocks label;
-
-  (* Update successor blocks of the dead block *)
-  List.iter
-    (fun target ->
-      let target_block = Hashtbl.find t.cfg.blocks target in
-      (* Remove label from predecessors of target. *)
-      target_block.predecessors <-
-        LabelSet.remove label target_block.predecessors)
-    (successor_labels block);
-
-  (* Remove from layout and other data-structures that track labels. *)
-  t.layout <- List.filter (fun l -> l <> label) t.layout;
-
-  (* If the dead block contains Lpushtrap, its handler becomes dead. Find
-     all occurrences of label as values of trap_labels and remove them,
-     because is_trap_handler depends on it. *)
-  Hashtbl.filter_map_inplace
-    (fun _ lbl_pushtrap_block ->
-      if label = lbl_pushtrap_block then None else Some lbl_pushtrap_block)
-    t.trap_labels;
-
-  (* If dead block's label is not new, add it to split_labels, mapped to the
-     empty layout! Needed for mapping annotations that may refer to dead
-     blocks. *)
-  if not (LabelSet.mem label t.new_labels) then
-    Hashtbl.add t.split_labels label [];
-
-  (* Not necessary to remove it from trap_depths, because it will only be
-     accessed if found in the cfg, but remove for consistency. *)
-  Hashtbl.remove t.trap_depths label;
-
-  (* Return updated list of eliminated blocks. CR-soon gyorsh: update this
-     when transitively eliminate blocks. *)
-  label :: dead_blocks
-
-(* Must be called after predecessors are registered and split labels are
-   registered. *)
-let rec eliminate_dead_blocks t =
-  (* if not t.preserve_orig_labels then
-   *   failwith "Won't eliminate dead blocks when preserve_orig_labels is set."; *)
-  let found =
-    Hashtbl.fold
-      (fun label block found ->
-        if
-          LabelSet.is_empty block.predecessors
-          && (not (is_trap_handler t label))
-          && t.cfg.entry_label <> label
-        then label :: found
-        else found)
-      t.cfg.blocks []
-  in
-  let num_found = List.length found in
-  if num_found > 0 then (
-    let dead_blocks = List.fold_left (eliminate_dead_block t) [] found in
-    let dead_blocks = List.sort_uniq Numbers.Int.compare dead_blocks in
-    let num_eliminated = List.length dead_blocks in
-    assert (num_eliminated >= num_found);
-    if verbose then (
-      Printf.printf
-        "Found %d dead blocks in function %s, eliminated %d (transitively).\n"
-        num_found t.cfg.fun_name num_eliminated;
-      Printf.printf "Eliminated blocks are:";
-      List.iter (fun lbl -> Printf.printf "\n%d" lbl) dead_blocks;
-      Printf.printf "\n" );
-    eliminate_dead_blocks t )
-
-module M = Numbers.Int.Map
-
-let simplify_terminator block =
-  let t = block.terminator in
-  match t.desc with
-  | Branch successors ->
-      (* Merge successors that go to the same label. Preserve order of
-         successors, except successors that share the same label target are
-         grouped. *)
-      (* Map label to list of conditions that target it. *)
-      (* CR-soon gyorsh: pairwise join of conditions is not canonical,
-         because some joins are not representable as a condition. *)
-      let map =
-        List.fold_left
-          (fun map (c, l) ->
-            let s =
-              match M.find_opt l map with
-              | None -> [ c ] (* Not seen this target yet *)
-              | Some (c1 :: rest) -> Simplify.disjunction c c1 @ rest
-              | Some [] -> assert false
-            in
-            M.add l s map)
-          M.empty successors
-      in
-      let new_successors, map =
-        List.fold_left
-          (fun (res, map) (_, l) ->
-            match M.find_opt l map with
-            | None -> (res, map)
-            | Some s ->
-                let map = M.remove l map in
-                let res =
-                  List.fold_left (fun res c -> (c, l) :: res) res s
-                in
-                (res, map))
-          ([], map) successors
-      in
-      assert (M.is_empty map);
-      let new_len = List.length new_successors in
-      let len = List.length successors in
-      assert (new_len <= len);
-      if new_len < len then
-        block.terminator <- { t with desc = Branch new_successors }
-  | Switch labels -> (
-      (* Convert simple case to branches. *)
-      (* Find position k and label l such that label.(j)=l for all
-         j=k...len-1. *)
-      let len = Array.length labels in
-      assert (len > 0);
-      let l = labels.(len - 1) in
-      let rec find_pos k =
-        if k = 0 then k
-        else if labels.(k - 1) = l then find_pos (k - 1)
-        else k
-      in
-      let k = find_pos (len - 1) in
-      match k with
-      | 0 ->
-          (* All labels are the same and equal to l *)
-          block.terminator <- { t with desc = Branch [ (Always, l) ] }
-      | 1 ->
-          let t0 = Test (Iinttest_imm (Iunsigned Clt, 1)) (* arg < 1 *) in
-          let t1 = Test (Iinttest_imm (Iunsigned Cge, 1)) (* arg >= 1 *) in
-          block.terminator <-
-            { t with desc = Branch [ (t0, labels.(0)); (t1, l) ] }
-      | 2 ->
-          let t0 = Test (Iinttest_imm (Iunsigned Clt, 1)) (* arg < 1 *) in
-          let t1 = Test (Iinttest_imm (Iunsigned Ceq, 1)) (* arg = 1 *) in
-          let t2 = Test (Iinttest_imm (Iunsigned Cgt, 1)) (* arg > 1 *) in
-          block.terminator <-
-            {
-              t with
-              desc = Branch [ (t0, labels.(0)); (t1, labels.(1)); (t2, l) ];
-            }
-      | _ -> () )
-  | _ -> ()
-
-(* CR-soon gyorsh: implement CFG traversal *)
-(* CR-soon gyorsh: abstraction of cfg updates that transparently and
-   efficiently keeps predecessors and successors in sync. For example,
-   change successors relation should automatically updates the predecessors
-   relation without recomputing them from scratch. *)
-
-(* CR-soon gyorsh: Optimize terminators. Implement switch as jump table or
-   as a sequence of branches depending on perf counters and layout. It
-   should be implemented as a separate transformation on the cfg, that needs
-   to be informated by the layout, but it should not be done while emitting
-   linear. This way we can keep to_linear as simple as possible to ensure
-   basic invariants are preserved, while other optimizations can be turned
-   on and off.*)
+  (* Layout was constructed in reverse, fix it now: *)
+  t.layout <- List.rev t.layout;
+  t

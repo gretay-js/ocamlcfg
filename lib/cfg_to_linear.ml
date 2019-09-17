@@ -15,63 +15,9 @@
 
 open Linear
 open Cfg
-
-type label = Linear.label
-
-module Layout = struct
-  type t = label list
-end
+open Cfg_builder
 
 let verbose = false
-
-type t = {
-  (* The graph itself *)
-  cfg : Cfg.t;
-  (* Original layout: linear order of blocks. *)
-  mutable layout : Layout.t;
-  (* Map labels to trap depths. Required for linearize. *)
-  trap_depths : (label, int) Hashtbl.t;
-  (* Maps trap handler block label [L] to the label of the block where the
-     "Lpushtrap L" reference it. Used for dead block elimination. This
-     mapping is one to one, but the reverse is not, because a block might
-     contain multiple Lpushtrap, which is not a terminator. *)
-  trap_labels : (label, label) Hashtbl.t;
-  (* Map id of instruction to label of the block that contains the
-     instruction. Used for mapping perf data back to linear IR. *)
-  mutable id_to_label : label Numbers.Int.Map.t;
-  (* Set for validation, unset for optimization. *)
-  mutable preserve_orig_labels : bool;
-}
-
-(* CR-soon gyorsh: new_labels and split_labels aren't used any more. *)
-
-let entry_label t = t.cfg.entry_label
-
-let get_block t label = Hashtbl.find_opt t.cfg.blocks label
-
-let get_layout t = t.layout
-
-let set_layout t new_layout =
-  t.layout <- new_layout;
-  t
-
-let get_name t = t.cfg.fun_name
-
-let id_to_label t id =
-  match Numbers.Int.Map.find_opt id t.id_to_label with
-  | None ->
-      Printf.fprintf stderr "id_to_label map: \n";
-      Numbers.Int.Map.iter
-        (fun id lbl -> Printf.printf "(%d,%d) " id lbl)
-        t.id_to_label;
-      Printf.fprintf stderr "\n";
-      failwith (Printf.sprintf "Cannot find label for id %d in map\n" id)
-  | Some lbl ->
-      if verbose then
-        Printf.printf "Found label %d for id %d in map\n" lbl id;
-      Some lbl
-
-let preserve_orig_labels t = t.preserve_orig_labels
 
 type labelled_insn = {
   label : label;
@@ -813,16 +759,75 @@ let simplify_terminator block =
       | _ -> () )
   | _ -> ()
 
-(* CR-soon gyorsh: implement CFG traversal *)
-(* CR-soon gyorsh: abstraction of cfg updates that transparently and
-   efficiently keeps predecessors and successors in sync. For example,
-   change successors relation should automatically updates the predecessors
-   relation without recomputing them from scratch. *)
+type fallthrough_block = {
+  label : label;
+  target_label : label;
+}
 
-(* CR-soon gyorsh: Optimize terminators. Implement switch as jump table or
-   as a sequence of branches depending on perf counters and layout. It
-   should be implemented as a separate transformation on the cfg, that needs
-   to be informated by the layout, but it should not be done while emitting
-   linear. This way we can keep to_linear as simple as possible to ensure
-   basic invariants are preserved, while other optimizations can be turned
-   on and off.*)
+(* Disconnects fallthrough block by re-routing it predecessors to point
+   directly to the successor block. *)
+let disconnect_fallthrough_block t { label; target_label } =
+  let block = Hashtbl.find t.cfg.blocks label in
+  (* Update the successor block's predecessors set: first remove the current
+     block and then add its predecessors. *)
+  let target_block = Hashtbl.find t.cfg.blocks target_label in
+  target_block.predecessors <-
+    LabelSet.remove label target_block.predecessors;
+  let update_pred pred_label =
+    (* Update the predecessor block's terminators *)
+    let replace_label l =
+      if l = label then (
+        target_block.predecessors <-
+          LabelSet.add pred_label target_block.predecessors;
+        target_label )
+      else l
+    in
+    let replace_successor (cond, l) = (cond, replace_label l) in
+    let pred_block = Hashtbl.find t.cfg.blocks pred_label in
+    let t = pred_block.terminator in
+    ( match t.desc with
+    | Branch successors ->
+        let new_successors = List.map replace_successor successors in
+        pred_block.terminator <- { t with desc = Branch new_successors }
+    | Switch labels ->
+        let new_labels = Array.map replace_label labels in
+        pred_block.terminator <- { t with desc = Switch new_labels }
+    | _ -> () );
+    simplify_terminator pred_block
+  in
+  LabelSet.iter update_pred block.predecessors;
+  block.terminator <- { block.terminator with desc = Branch [] };
+  block.predecessors <- LabelSet.empty
+
+(* Find and disconnect fallthrough blocks until fixpoint. Does not eliminate
+   dead blocks that result from it. Dead block elimination should run after
+   it to delete these blocks.*)
+let rec disconnect_fallthrough_blocks t =
+  let found =
+    Hashtbl.fold
+      (fun label block found ->
+        let successors_labels = successor_labels block in
+        if
+          t.cfg.entry_label <> label
+          (* not entry block *)
+          && List.length successors_labels = 1
+          (* single successor *)
+          && (not (is_trap_handler t label))
+          && (* not trap label *)
+             List.length block.body = 0
+          (* empty body *)
+        then (
+          let target_label = List.hd successors_labels in
+          if verbose then
+            Printf.printf "block at %d has single successor %d\n" label
+              target_label;
+          { label; target_label } :: found )
+        else found)
+      t.cfg.blocks []
+  in
+  let len = List.length found in
+  if len > 0 then (
+    List.iter (disconnect_fallthrough_block t) found;
+    if verbose then
+      Printf.printf "Disconnected fallthrough blocks: %d\n" len;
+    disconnect_fallthrough_blocks t )
