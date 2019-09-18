@@ -42,7 +42,7 @@ val id_to_label : t -> int -> label option
 
 val entry_label : t -> label
 
-val print : out_channel -> t -> unit
+val print : string -> out_channel -> t -> unit
 
 (* Mutates t inplace *)
 val eliminate_dead_blocks : t -> unit
@@ -69,3 +69,9 @@ val basic_to_linear :
   Cfg.basic Cfg.instruction ->
   Linear.instruction ->
   Linear.instruction
+
+val verbose : bool ref
+
+val dot_format : bool ref
+
+val dot_show_instr : bool ref

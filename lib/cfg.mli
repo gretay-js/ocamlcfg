@@ -144,6 +144,7 @@ val successor_labels : t -> block -> label list
 
 (* Debug printing *)
 val print :
+  string ->
   out_channel ->
   t ->
   label list ->
@@ -153,6 +154,8 @@ val print :
     Linear.instruction ->
     Linear.instruction) ->
   linearize_terminator:(terminator instruction -> Linear.instruction) ->
+  dot_format:bool ->
+  dot_show_instr:bool ->
   unit
 
 val print_terminator : Format.formatter -> terminator instruction -> unit

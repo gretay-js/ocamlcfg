@@ -22,7 +22,11 @@ module Layout = struct
   type t = label list
 end
 
-let verbose = false
+let verbose = ref true
+
+let dot_format = ref true
+
+let dot_show_instr = ref true
 
 type t = {
   (* The graph itself *)
@@ -77,7 +81,7 @@ let id_to_label t id =
       Printf.fprintf stderr "\n";
       failwith (Printf.sprintf "Cannot find label for id %d in map\n" id)
   | Some lbl ->
-      if verbose then
+      if !verbose then
         Printf.printf "Found label %d for id %d in map\n" lbl id;
       Some lbl
 
@@ -304,7 +308,7 @@ let rec create_blocks t i block ~trap_depth =
           (Printf.sprintf
              "End of function without terminator for block %d\n" block.start)
   | Llabel start ->
-      if verbose then
+      if !verbose then
         Printf.printf "Llabel start=%d, block.start=%d\n" start block.start;
 
       (* Add the previos block, if it did not have an explicit terminator. *)
@@ -348,7 +352,7 @@ let rec create_blocks t i block ~trap_depth =
       add_terminator (Raise kind);
       create_blocks t i.next block ~trap_depth
   | Lbranch lbl ->
-      if verbose then Printf.printf "Lbranch %d\n" lbl;
+      if !verbose then Printf.printf "Lbranch %d\n" lbl;
       let successors = [ (Always, lbl) ] in
       assert (has_label i.next);
       record_trap_depth_at_label t lbl ~trap_depth;
@@ -597,7 +601,7 @@ let linearize_terminator t ?extra_debug terminator ~next =
     | Branch successors -> (
         match successors with
         | [] ->
-            if verbose then Printf.printf "next label is %d\n" next.label;
+            if !verbose then Printf.printf "next label is %d\n" next.label;
             failwith "Branch without successors"
         | [ (Always, label) ] ->
             if next.label = label then [] else [ Lbranch label ]
@@ -715,12 +719,15 @@ let to_linear t ~extra_debug =
   done;
   !next.insn
 
-let print oc t =
+let print msg ~dot_format oc t =
   let extra_debug = None in
-  Cfg.print oc t.cfg t.layout
+  Cfg.print msg ~dot_format oc t.cfg t.layout
     ~linearize_basic:(basic_to_linear ?extra_debug)
     ~linearize_terminator:
       (linearize_terminator t ?extra_debug ~next:labelled_insn_end)
+
+let print msg oc t =
+  print msg ~dot_format:!dot_format ~dot_show_instr:!dot_show_instr oc t
 
 (* Simplify CFG *)
 (* CR-soon gyorsh: needs more testing. *)
@@ -787,7 +794,7 @@ let rec eliminate_dead_blocks t =
     let dead_blocks = List.sort_uniq Numbers.Int.compare dead_blocks in
     let num_eliminated = List.length dead_blocks in
     assert (num_eliminated >= num_found);
-    if verbose then (
+    if !verbose then (
       Printf.printf
         "Found %d dead blocks in function %s, eliminated %d (transitively).\n"
         num_found t.cfg.fun_name num_eliminated;
@@ -873,14 +880,9 @@ let simplify_terminator block =
       | _ -> () )
   | _ -> ()
 
-type fallthrough_block = {
-  label : label;
-  target_label : label;
-}
-
 (* Disconnects fallthrough block by re-routing it predecessors to point
    directly to the successor block. *)
-let disconnect_fallthrough_block t { label; target_label } =
+let disconnect_fallthrough_block t label target_label =
   let block = Hashtbl.find t.cfg.blocks label in
   (* Update the successor block's predecessors set: first remove the current
      block and then add its predecessors. *)
@@ -908,7 +910,7 @@ let disconnect_fallthrough_block t { label; target_label } =
         pred_block.terminator <-
           { pred_block.terminator with desc = Switch new_labels }
     | Tailcall (Self _) ->
-        if verbose then
+        if !verbose then
           Printf.printf
             "disconnect fallthrough %d: pred.terminator=Tailcall Self \
              entry=%d\n"
@@ -920,7 +922,9 @@ let disconnect_fallthrough_block t { label; target_label } =
   in
   LabelSet.iter update_pred block.predecessors;
   block.terminator <- { block.terminator with desc = Branch [] };
-  block.predecessors <- LabelSet.empty
+  block.predecessors <- LabelSet.empty;
+  if !verbose then
+    print (Printf.sprintf "after_disconnect_ft_%d" label) stdout t
 
 (* Find and disconnect fallthrough blocks until fixpoint. Does not eliminate
    dead blocks that result from it. Dead block elimination should run after
@@ -941,17 +945,17 @@ let rec disconnect_fallthrough_blocks t =
           (* empty body *)
         then (
           let target_label = List.hd successors_labels in
-          if verbose then
-            Printf.printf "block at %d has single successor %d\n" label
+          if !verbose then
+            Printf.printf "Block at %d has single successor %d\n" label
               target_label;
-          { label; target_label } :: found )
+          disconnect_fallthrough_block t label target_label;
+          label :: found )
         else found)
       t.cfg.blocks []
   in
   let len = List.length found in
   if len > 0 then (
-    List.iter (disconnect_fallthrough_block t) found;
-    if verbose then
+    if !verbose then
       Printf.printf "Disconnected fallthrough blocks: %d\n" len;
     disconnect_fallthrough_blocks t )
 
@@ -969,15 +973,16 @@ let eliminate_fallthrough_blocks t =
     eliminate_dead_blocks t;
     let new_len = Hashtbl.length t.cfg.blocks in
     if new_len < len && new_len > 0 then (
-      if verbose then
+      if !verbose then
         Printf.printf
           "Eliminated %d fallthrough blocks in %s: len=%d new_len=%d\n"
           (len - new_len) t.cfg.fun_name len new_len;
       loop () )
   in
-  if verbose then print stdout t;
+  if !verbose then print "before_elim_ft" stdout t;
   Hashtbl.iter (fun _ b -> simplify_terminator b) t.cfg.blocks;
-  loop ()
+  loop ();
+  if !verbose then print "after_elim_ft" stdout t
 
 (* CR-soon gyorsh: implement CFG traversal *)
 (* CR-soon gyorsh: abstraction of cfg updates that transparently and
