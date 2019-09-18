@@ -135,7 +135,7 @@ type t = {
   entry_label : label;
   (* Without prologue, this is the same as entry_label. Otherwise, prologue
      falls through to tailrec_entry. *)
-  fun_tailrec_entry_point_label : label;
+  mutable fun_tailrec_entry_point_label : label;
 }
 
 val successors : t -> block -> successor list

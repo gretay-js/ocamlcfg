@@ -22,7 +22,7 @@ module Layout = struct
   type t = label list
 end
 
-let verbose = false
+let verbose = true
 
 type t = {
   (* The graph itself *)
@@ -898,15 +898,19 @@ let disconnect_fallthrough_block t { label; target_label } =
     in
     let replace_successor (cond, l) = (cond, replace_label l) in
     let pred_block = Hashtbl.find t.cfg.blocks pred_label in
-    let t = pred_block.terminator in
-    ( match t.desc with
+    ( match pred_block.terminator.desc with
     | Branch successors ->
         let new_successors = List.map replace_successor successors in
-        pred_block.terminator <- { t with desc = Branch new_successors }
+        pred_block.terminator <-
+          { pred_block.terminator with desc = Branch new_successors }
     | Switch labels ->
         let new_labels = Array.map replace_label labels in
-        pred_block.terminator <- { t with desc = Switch new_labels }
-    | _ -> () );
+        pred_block.terminator <-
+          { pred_block.terminator with desc = Switch new_labels }
+    | Tailcall (Self _) ->
+        assert (label = t.cfg.fun_tailrec_entry_point_label);
+        t.cfg.fun_tailrec_entry_point_label <- target_label
+    | Return | Raise _ | Tailcall (Func _) -> () );
     simplify_terminator pred_block
   in
   LabelSet.iter update_pred block.predecessors;
