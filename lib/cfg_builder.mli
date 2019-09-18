@@ -11,64 +11,40 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
-(* Control Flow Graph of a function. *)
-type t
+(* Control Flow Graph of a function with its layout. *)
 
-type label = Linear.label
+type t = {
+  (* The graph itself *)
+  cfg : Cfg.t;
+  (* Original layout: linear order of blocks. *)
+  mutable layout : Layout.t;
+  (* Map labels to trap depths. Required for linearize. *)
+  trap_depths : (Cfg.label, int) Hashtbl.t;
+  (* Maps trap handler block label [L] to the label of the block where the
+     "Lpushtrap L" reference it. Used for dead block elimination. This
+     mapping is one to one, but the reverse is not, because a block might
+     contain multiple Lpushtrap, which is not a terminator. *)
+  trap_labels : (Cfg.label, Cfg.label) Hashtbl.t;
+  (* Map id of instruction to label of the block that contains the
+     instruction. Used for mapping perf data back to linear IR. *)
+  mutable id_to_label : Cfg.label Numbers.Int.Map.t;
+  (* Set for validation, unset for optimization. *)
+  mutable preserve_orig_labels : bool;
+  (* Labels added by cfg construction, except entry. Used for testing of the
+     mapping back to Linear IR. *)
+  mutable new_labels : Cfg.LabelSet.t;
+}
 
-module Layout : sig
-  type t = label list
-end
+val is_trap_handler : t -> Cfg.label -> bool
 
-val from_linear : Linear.fundecl -> preserve_orig_labels:bool -> t
-
-val to_linear : t -> extra_debug:bool -> Linear.instruction
-
-val get_block : t -> label -> Cfg.block option
-
-val get_layout : t -> Layout.t
-
-val set_layout : t -> Layout.t -> t
-
-val is_trap_handler : t -> label -> bool
-
-val get_name : t -> string
-
-val successor_labels : t -> Cfg.block -> label list
-
-val preserve_orig_labels : t -> bool
-
-val id_to_label : t -> int -> label option
-
-val entry_label : t -> label
-
-val print : string -> out_channel -> t -> unit
-
-(* Mutates t inplace *)
-val eliminate_dead_blocks : t -> unit
-
-(* Mutates t inplace and also eliminate dead blocks *)
-val eliminate_fallthrough_blocks : t -> unit
+val id_to_label : t -> int -> Cfg.label option
 
 type labelled_insn = {
-  label : label;
+  label : Cfg.label;
   insn : Linear.instruction;
 }
 
 val labelled_insn_end : labelled_insn
-
-val linearize_terminator :
-  t ->
-  ?extra_debug:string ->
-  Cfg.terminator Cfg.instruction ->
-  next:labelled_insn ->
-  Linear.instruction
-
-val basic_to_linear :
-  ?extra_debug:string ->
-  Cfg.basic Cfg.instruction ->
-  Linear.instruction ->
-  Linear.instruction
 
 val verbose : bool ref
 

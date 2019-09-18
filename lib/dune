@@ -1,6 +1,9 @@
 (library
  (name ocamlcfg)
  (public_name ocamlcfg)
+ (private_modules
+        extra_debug
+        simplify_comparisons )
  (libraries
         compiler-libs.common)
  (synopsis "library for building CFG"))
