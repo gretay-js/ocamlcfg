@@ -12,3 +12,5 @@
 (*                                                                        *)
 (**************************************************************************)
 val run : Cfg_builder.t -> extra_debug:bool -> Linear.instruction
+
+val debug_print : out_channel -> Cfg_builder.t -> unit

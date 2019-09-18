@@ -1,5 +1,1 @@
-type label = Linear.label
-
-module Layout : sig
-  type t = label list
-end
+type t = Cfg.label list

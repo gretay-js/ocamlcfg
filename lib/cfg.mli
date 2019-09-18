@@ -134,17 +134,4 @@ val successors : block -> successor list
 
 val successor_labels : block -> label list
 
-(* Debug printing *)
-val print :
-  out_channel ->
-  t ->
-  label list ->
-  linearize_basic:
-    (basic instruction ->
-    (* next, but not labeling the argument for easier fold *)
-    Linear.instruction ->
-    Linear.instruction) ->
-  linearize_terminator:(terminator instruction -> Linear.instruction) ->
-  unit
-
-val print_terminator : Format.formatter -> terminator instruction -> unit
+val get_block : t -> label -> block option

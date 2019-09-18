@@ -14,6 +14,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42-44-45"]
 
 open Linear
+open Cfg
 open Cfg_builder
 
 let verbose = false
@@ -49,7 +50,7 @@ let create_empty_instruction ?(trap_depth = 0) desc =
     id = get_new_linear_id ();
   }
 
-let create_empty_block t start =
+let create_empty_block (t : Cfg_builder.t) start =
   let block =
     {
       start;
@@ -86,25 +87,6 @@ let register_predecessors t =
             LabelSet.add label target_block.predecessors)
         targets)
     t.cfg.blocks
-
-let is_trap_handler t label = Hashtbl.mem t.trap_labels label
-
-let register_split_labels t =
-  List.fold_right
-    (fun label new_labels_layout ->
-      if LabelSet.mem label t.new_labels then
-        (* Add a new label to accumulated layout *)
-        label :: new_labels_layout
-      else (
-        (* Original label found *)
-        if new_labels_layout <> [] then
-          (* The original label was followed by some new ones, which we have
-             gathers in new_labels_layout. Tuck on original label and
-             register the split layout. *)
-          Hashtbl.add t.split_labels label (label :: new_labels_layout);
-        [] ))
-    t.layout []
-  |> ignore
 
 let create_instr desc ~trap_depth (i : Linear.instruction) =
   {
@@ -144,58 +126,6 @@ let mark_trap_label t ~lbl_handler ~lbl_pushtrap_block =
           %d\n"
          lbl_handler lbl_pushtrap_block);
   Hashtbl.add t.trap_labels lbl_handler lbl_pushtrap_block
-
-let from_basic = function
-  | Prologue -> Lprologue
-  | Reloadretaddr -> Lreloadretaddr
-  | Entertrap -> Lentertrap
-  | Pushtrap { lbl_handler } -> Lpushtrap { lbl_handler }
-  | Poptrap -> Lpoptrap
-  | Call (F (Indirect { label_after })) -> Lop (Icall_ind { label_after })
-  | Call (F (Immediate { func; label_after })) ->
-      Lop (Icall_imm { func; label_after })
-  | Call (P (External { func; alloc; label_after })) ->
-      Lop (Iextcall { func; alloc; label_after })
-  | Call
-      (P
-        (Checkbound
-          { immediate = None; label_after_error; spacetime_index })) ->
-      Lop (Iintop (Icheckbound { label_after_error; spacetime_index }))
-  | Call
-      (P
-        (Checkbound
-          { immediate = Some i; label_after_error; spacetime_index })) ->
-      Lop
-        (Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i))
-  | Call (P (Alloc { bytes; label_after_call_gc; spacetime_index })) ->
-      Lop (Ialloc { bytes; label_after_call_gc; spacetime_index })
-  | Op op -> (
-      match op with
-      | Move -> Lop Imove
-      | Spill -> Lop Ispill
-      | Reload -> Lop Ireload
-      | Const_int n -> Lop (Iconst_int n)
-      | Const_float n -> Lop (Iconst_float n)
-      | Const_symbol n -> Lop (Iconst_symbol n)
-      | Stackoffset n -> Lop (Istackoffset n)
-      | Load (c, m) -> Lop (Iload (c, m))
-      | Store (c, m, b) -> Lop (Istore (c, m, b))
-      | Intop op -> Lop (Iintop op)
-      | Intop_imm (op, i) -> Lop (Iintop_imm (op, i))
-      | Negf -> Lop Inegf
-      | Absf -> Lop Iabsf
-      | Addf -> Lop Iaddf
-      | Subf -> Lop Isubf
-      | Mulf -> Lop Imulf
-      | Divf -> Lop Idivf
-      | Floatofint -> Lop Ifloatofint
-      | Intoffloat -> Lop Iintoffloat
-      | Specific op -> Lop (Ispecific op)
-      | Name_for_debugger
-          { ident; which_parameter; provenance; is_assignment } ->
-          Lop
-            (Iname_for_debugger
-               { ident; which_parameter; provenance; is_assignment }) )
 
 let record_trap_depth_at_label t label ~trap_depth =
   match Hashtbl.find t.trap_depths label with
@@ -427,9 +357,23 @@ let make_empty_cfg name ~preserve_orig_labels =
     cfg;
     trap_labels : (label, label) Hashtbl.t = Hashtbl.create 7;
     trap_depths : (label, int) Hashtbl.t = Hashtbl.create 31;
+    new_labels = LabelSet.empty;
+    id_to_label = Numbers.Int.Map.empty;
     layout = [];
     preserve_orig_labels;
   }
+
+let compute_id_to_label t =
+  let fold_block map label =
+    let block = Hashtbl.find t.cfg.blocks label in
+    let new_map =
+      List.fold_left
+        (fun map i -> Numbers.Int.Map.add i.id label map)
+        map block.body
+    in
+    Numbers.Int.Map.add block.terminator.id label new_map
+  in
+  t.id_to_label <- List.fold_left fold_block Numbers.Int.Map.empty t.layout
 
 let run (f : Linear.fundecl) ~preserve_orig_labels =
   let t = make_empty_cfg f.fun_name ~preserve_orig_labels in
@@ -445,6 +389,7 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
      of forward jumps: the blocks do not exist when the jump that reference
      them is processed. CR-soon gyorsh: combine with dead block elimination. *)
   register_predecessors t;
+  compute_id_to_label t;
 
   (* Layout was constructed in reverse, fix it now: *)
   t.layout <- List.rev t.layout;

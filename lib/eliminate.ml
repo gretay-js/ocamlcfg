@@ -20,6 +20,7 @@
 (* Simplify CFG *)
 (* CR-soon gyorsh: needs more testing. *)
 
+open Cfg_builder
 open Cfg
 module M = Numbers.Int.Map
 
@@ -39,7 +40,8 @@ let simplify_terminator block =
             let s =
               match M.find_opt l map with
               | None -> [ c ] (* Not seen this target yet *)
-              | Some (c1 :: rest) -> Simplify_comparisons.disjunction c c1 @ rest
+              | Some (c1 :: rest) ->
+                  Simplify_comparisons.disjunction c c1 @ rest
               | Some [] -> assert false
             in
             M.add l s map)
@@ -100,14 +102,14 @@ let simplify_terminator block =
 
 (* CR-soon gyorsh: eliminate transitively blocks that become dead from this
    one. *)
-let eliminate_dead_block cfg dead_blocks label =
-  let block = Hashtbl.find cfg.blocks label in
-  Hashtbl.remove cfg.blocks label;
+let eliminate_dead_block t dead_blocks label =
+  let block = Hashtbl.find t.cfg.blocks label in
+  Hashtbl.remove t.cfg.blocks label;
 
   (* Update successor blocks of the dead block *)
   List.iter
     (fun target ->
-      let target_block = Hashtbl.find cfg.blocks target in
+      let target_block = Hashtbl.find t.cfg.blocks target in
       (* Remove label from predecessors of target. *)
       target_block.predecessors <-
         LabelSet.remove label target_block.predecessors)
@@ -128,15 +130,16 @@ let eliminate_dead_block cfg dead_blocks label =
      accessed if found in the cfg, but remove for consistency. *)
   Hashtbl.remove t.trap_depths label;
 
+  t.new_labels <- LabelSet.remove label t.new_labels;
+
   (* Return updated list of eliminated blocks. CR-soon gyorsh: update this
      when transitively eliminate blocks. *)
   label :: dead_blocks
 
-(* Must be called after predecessors are registered and split labels are
-   registered. *)
-let rec eliminate_dead_blocks cfg =
-  (* if not t.preserve_orig_labels then
-   *   failwith "Won't eliminate dead blocks when preserve_orig_labels is set."; *)
+(* Must be called after predecessors are registered. *)
+let rec eliminate_dead_blocks t =
+  if t.preserve_orig_labels then
+    failwith "Won't eliminate dead blocks when preserve_orig_labels is set.";
   let found =
     Hashtbl.fold
       (fun label block found ->
@@ -146,26 +149,24 @@ let rec eliminate_dead_blocks cfg =
           && t.cfg.entry_label <> label
         then label :: found
         else found)
-      cfg.blocks []
+      t.cfg.blocks []
   in
   let num_found = List.length found in
   if num_found > 0 then (
-    let dead_blocks = List.fold_left (eliminate_dead_block cfg) [] found in
+    let dead_blocks = List.fold_left (eliminate_dead_block t) [] found in
     let dead_blocks = List.sort_uniq Numbers.Int.compare dead_blocks in
     let num_eliminated = List.length dead_blocks in
     assert (num_eliminated >= num_found);
-    if verbose then (
+    if !verbose then (
       Printf.printf
         "Found %d dead blocks in function %s, eliminated %d (transitively).\n"
-        num_found cfg.fun_name num_eliminated;
+        num_found t.cfg.fun_name num_eliminated;
       Printf.printf "Eliminated blocks are:";
       List.iter (fun lbl -> Printf.printf "\n%d" lbl) dead_blocks;
       Printf.printf "\n" );
-    eliminate_dead_blocks cfg )
+    eliminate_dead_blocks t )
 
-let dead_blocks cfg_builder =
-  List.iter (eliminate_dead_blocks cfg)
-
+let dead_blocks t = eliminate_dead_blocks t
 
 type fallthrough_block = {
   label : label;
@@ -210,13 +211,13 @@ let disconnect_fallthrough_block t { label; target_label } =
 (* Find and disconnect fallthrough blocks until fixpoint. Does not eliminate
    dead blocks that result from it. Dead block elimination should run after
    it to delete these blocks.*)
-let rec disconnect_fallthrough_blocks cfg =
+let rec disconnect_fallthrough_blocks t =
   let found =
     Hashtbl.fold
       (fun label block found ->
         let successors_labels = successor_labels block in
         if
-          cfg.entry_label <> label
+          t.cfg.entry_label <> label
           (* not entry block *)
           && List.length successors_labels = 1
           (* single successor *)
@@ -226,17 +227,17 @@ let rec disconnect_fallthrough_blocks cfg =
           (* empty body *)
         then (
           let target_label = List.hd successors_labels in
-          if verbose then
+          if !verbose then
             Printf.printf "block at %d has single successor %d\n" label
               target_label;
           { label; target_label } :: found )
         else found)
-      cfg.blocks []
+      t.cfg.blocks []
   in
   let len = List.length found in
   if len > 0 then (
     List.iter (disconnect_fallthrough_block t) found;
-    if verbose then
+    if !verbose then
       Printf.printf "Disconnected fallthrough blocks: %d\n" len;
     disconnect_fallthrough_blocks t )
 
@@ -248,19 +249,18 @@ let fallthrough_blocks t =
      fixpoint. Termination is guaranteed because every step eliminates an
      edge or a node. The order matters for performance but not for the final
      result. *)
-  cfg
   let rec loop () =
-    let len = Hashtbl.length cfg.blocks in
-    disconnect_fallthrough_blocks cfg;
-    dead_blocks cfg;
-    let new_len = Hashtbl.length cfg.blocks in
+    let len = Hashtbl.length t.cfg.blocks in
+    disconnect_fallthrough_blocks t;
+    dead_blocks t;
+    let new_len = Hashtbl.length t.cfg.blocks in
     if new_len < len && new_len > 0 then (
-      if verbose then
+      if !verbose then
         Printf.printf
           "Eliminated %d fallthrough blocks in %s: len=%d new_len=%d\n"
-          (len - new_len) cfg.fun_name len new_len;
+          (len - new_len) t.cfg.fun_name len new_len;
       loop () )
   in
-  if verbose then print stdout t;
+  if !verbose then Cfg_to_linear.debug_print stdout t;
   Hashtbl.iter (fun _ b -> simplify_terminator b) t.cfg.blocks;
   loop ()
