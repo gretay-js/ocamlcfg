@@ -22,7 +22,7 @@ module Layout = struct
   type t = label list
 end
 
-let verbose = true
+let verbose = false
 
 type t = {
   (* The graph itself *)
@@ -908,6 +908,11 @@ let disconnect_fallthrough_block t { label; target_label } =
         pred_block.terminator <-
           { pred_block.terminator with desc = Switch new_labels }
     | Tailcall (Self _) ->
+        if verbose then
+          Printf.printf
+            "disconnect fallthrough %d: pred.terminator=Tailcall Self \
+             entry=%d\n"
+            label t.cfg.fun_tailrec_entry_point_label;
         assert (label = t.cfg.fun_tailrec_entry_point_label);
         t.cfg.fun_tailrec_entry_point_label <- target_label
     | Return | Raise _ | Tailcall (Func _) -> () );
