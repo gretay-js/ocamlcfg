@@ -351,7 +351,7 @@ let make_empty_cfg fun_name fun_tailrec_entry_point_label
   let cfg =
     {
       fun_name;
-      entry_label = 0;
+      entry_label = 1;
       blocks : (label, block) Hashtbl.t = Hashtbl.create 31;
       fun_tailrec_entry_point_label;
     }
