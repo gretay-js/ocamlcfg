@@ -93,7 +93,7 @@ let basic_to_linear ?extra_debug i next =
   let desc = from_basic i.desc in
   to_linear_instr desc next ~i ?extra_debug
 
-let linearize_terminator t ?extra_debug terminator ~next =
+let linearize_terminator cfg ?extra_debug terminator next =
   let desc_list =
     match terminator.desc with
     | Return -> [ Lreturn ]
@@ -103,7 +103,7 @@ let linearize_terminator t ?extra_debug terminator ~next =
     | Tailcall (Func (Immediate { func; label_after })) ->
         [ Lop (Itailcall_imm { func; label_after }) ]
     | Tailcall (Self { label_after }) ->
-        [ Lop (Itailcall_imm { func = t.cfg.fun_name; label_after }) ]
+        [ Lop (Itailcall_imm { func = cfg.fun_name; label_after }) ]
     | Switch labels -> [ Lswitch labels ]
     | Branch successors -> (
         match successors with
@@ -115,7 +115,7 @@ let linearize_terminator t ?extra_debug terminator ~next =
             if not (cond_p = invert_test cond_q) then (
               Printf.fprintf stderr
                 "Cannot linearize branch with non-invert:\n";
-              Print.print_terminator
+              Utils.print_terminator
                 (Format.formatter_of_out_channel stderr)
                 terminator;
               failwith "Illegal successors"
@@ -203,7 +203,7 @@ let run t ~extra_debug =
     let block = Hashtbl.find t.cfg.blocks label in
     assert (label = block.start);
     let terminator =
-      linearize_terminator t ?extra_debug block.terminator ~next:!next
+      linearize_terminator t.cfg ?extra_debug block.terminator !next
     in
     let body =
       List.fold_right (basic_to_linear ?extra_debug) block.body terminator
@@ -223,10 +223,3 @@ let run t ~extra_debug =
     next := { label; insn }
   done;
   !next.insn
-
-let debug_print msg oc t =
-  let extra_debug = None in
-  Print.print msg oc t.cfg t.layout
-    ~linearize_basic:(basic_to_linear ?extra_debug)
-    ~linearize_terminator:
-      (linearize_terminator t ?extra_debug ~next:labelled_insn_end)

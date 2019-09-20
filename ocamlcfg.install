@@ -57,11 +57,15 @@ lib: [
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_comparisons.cmt"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_comparisons.cmti"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_comparisons.cmx"
+  "_build/install/default/lib/ocamlcfg/ocamlcfg__Utils.cmi"
+  "_build/install/default/lib/ocamlcfg/ocamlcfg__Utils.cmt"
+  "_build/install/default/lib/ocamlcfg/ocamlcfg__Utils.cmx"
   "_build/install/default/lib/ocamlcfg/opam"
   "_build/install/default/lib/ocamlcfg/print.ml"
   "_build/install/default/lib/ocamlcfg/print.mli"
   "_build/install/default/lib/ocamlcfg/simplify_comparisons.ml"
   "_build/install/default/lib/ocamlcfg/simplify_comparisons.mli"
+  "_build/install/default/lib/ocamlcfg/utils.ml"
 ]
 doc: [
   "_build/install/default/doc/ocamlcfg/README.md"

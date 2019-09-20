@@ -266,6 +266,6 @@ let fallthrough_blocks t =
           (len - new_len) t.cfg.fun_name len new_len;
       loop () )
   in
-  if !verbose then Cfg_to_linear.debug_print "before_elim_ft" stdout t;
+  if !verbose then Print.debug_print "before_elim_ft" stdout t;
   Hashtbl.iter (fun _ b -> simplify_terminator b) t.cfg.blocks;
   loop ()
