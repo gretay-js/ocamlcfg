@@ -17,40 +17,35 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
-type label = Linear.label
 
-module LabelSet = Set.Make (struct
-  type t = label
-
-  let compare (x : t) y = compare x y
-end)
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 (* CR-soon gyorsh: store label after separately and update after reordering. *)
 type func_call_operation =
-  | Indirect of { label_after : label }
-  | Immediate of {
-      func : string;
-      label_after : label;
+  | Indirect of { label_after : Label.t; }
+  | Direct of {
+      func_symbol : string;
+      label_after : Label.t;
     }
 
 type tail_call_operation =
-  | Self of { label_after : label }
+  | Self of { label_after : Label.t; }
   | Func of func_call_operation
 
 type prim_call_operation =
   | External of {
-      func : string;
+      func_symbol : string;
       alloc : bool;
-      label_after : label;
+      label_after : Label.t;
     }
   | Alloc of {
       bytes : int;
-      label_after_call_gc : label option;
+      label_after_call_gc : Label.t option;
       spacetime_index : int;
     }
   | Checkbound of {
       immediate : int option;
-      label_after_error : label option;
+      label_after_error : Label.t option;
       spacetime_index : int;
     }
 
@@ -90,17 +85,16 @@ type condition =
   | Always
   | Test of Mach.test
 
-type successor = condition * label
+type successor = condition * Label.t
 
 (* CR-soon gyorsh: Switch has successors but currently no way to attach
    User_data to them. Can be fixed by translating Switch to Branch. *)
 
-(* basic block *)
-type block = {
-  start : label;
+type basic_block = {
+  start : Label.t;
   mutable body : basic instruction list;
   mutable terminator : terminator instruction;
-  mutable predecessors : LabelSet.t;
+  mutable predecessors : Label.Set.t;
 }
 
 and 'a instruction = {
@@ -118,45 +112,90 @@ and basic =
   | Call of call_operation
   | Reloadretaddr
   | Entertrap
-  | Pushtrap of { lbl_handler : label }
+  | Pushtrap of { lbl_handler : Label.t; }
   | Poptrap
   | Prologue
 
 and terminator =
   | Branch of successor list
-  | Switch of label array
+  | Switch of Label.t array
   | Return
   | Raise of Cmm.raise_kind
   | Tailcall of tail_call_operation
 
-(* Control Flow Graph of a function. *)
+let print_terminator ppf ti =
+  Format.fprintf ppf "\n";
+  match ti.desc with
+  | Branch successors ->
+      Format.fprintf ppf "Branch with %d successors:\n"
+        (List.length successors);
+      List.iter
+        (fun (c, l) ->
+          match c with
+          | Always -> Format.fprintf ppf "goto %d\n" l
+          | Test c ->
+              Format.fprintf ppf "if %a then goto %d\n" (Printmach.test c)
+                ti.arg l)
+        successors
+  | Switch labels ->
+      Format.fprintf ppf "switch %a of\n" Printmach.reg ti.arg.(0);
+      for i = 0 to Array.length labels - 1 do
+        Format.fprintf ppf "case %d: goto %d\n" i labels.(i)
+      done
+  | Return -> Format.fprintf ppf "Return\n"
+  | Raise _ -> Format.fprintf ppf "Raise\n"
+  | Tailcall (Self _) -> Format.fprintf ppf "Tailcall self\n"
+  | Tailcall _ -> Format.fprintf ppf "Tailcall\n"
+
 type t = {
-  (* Map labels to blocks *)
-  blocks : (label, block) Hashtbl.t;
-  (* Function name, used for printing messages *)
+  blocks : basic_block Label.Tbl.t;
   fun_name : string;
-  (* Must be first in all layouts of this cfg. *)
-  entry_label : label;
-  (* Without prologue, this is the same as entry_label. Otherwise, prologue
-     falls through to tailrec_entry. *)
-  mutable fun_tailrec_entry_point_label : label;
+  entry_label : Label.t;
+  mutable fun_tailrec_entry_point_label : Label.t;
 }
+
+let create ~fun_name ~fun_tailrec_entry_point_label =
+  { fun_name;
+    entry_label = 1;
+    blocks = Label.Tbl.create 31;
+    fun_tailrec_entry_point_label;
+  }
 
 let successors t block =
   match block.terminator.desc with
   | Branch successors -> successors
-  | Return -> []
-  | Raise _ -> []
   | Tailcall (Self _) -> [ (Always, t.fun_tailrec_entry_point_label) ]
-  | Tailcall _ -> []
   | Switch labels ->
       Array.mapi
         (fun i label -> (Test (Iinttest_imm (Iunsigned Ceq, i)), label))
         labels
       |> Array.to_list
+  | Return | Raise _ | Tailcall _ -> []
 
 let successor_labels t block =
   let _, labels = List.split (successors t block) in
   labels
 
-let get_block t label = Hashtbl.find_opt t.blocks label
+let mem_block t label = Label.Tbl.mem t.blocks label
+
+let get_and_remove_block_exn t label =
+  match Label.Tbl.find t.blocks label with
+  | exception Not_found -> Misc.fatal_errorf "Block %d not found" label
+  | block ->
+    Label.Tbl.remove t.blocks label;
+    block
+
+let get_block t label =
+  Label.Tbl.find_opt t.blocks label
+
+let get_block_exn t label =
+  match Label.Tbl.find t.blocks label with
+  | exception Not_found -> Misc.fatal_errorf "Block %d not found" label
+  | block -> block
+
+let fun_name t = t.fun_name
+let entry_label t = t.entry_label
+let fun_tailrec_entry_point_label t = t.fun_tailrec_entry_point_label
+
+let set_fun_tailrec_entry_point_label t label =
+  t.fun_tailrec_entry_point_label <- label

@@ -12,11 +12,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Insertion of extra debugging information used to correlate between
-    machine instructions, [Linear] and [Cfg] code. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val get_linear_file : string -> string
+type labelled_insn = {
+  label : Label.t;
+  insn : Linear.instruction;
+}
 
-val add_discriminator : Debuginfo.t -> string -> int -> Debuginfo.t
+let labelled_insn_end = { label = -1; insn = Linear.end_instr; }
+
+let rec has_label (i : Linear.instruction) =
+  match i.desc with
+  | Lend | Llabel _ -> true
+  | Ladjust_trap_depth _ -> has_label i.next
+  | _ -> failwith "Unexpected instruction after terminator"

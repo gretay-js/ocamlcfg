@@ -12,11 +12,15 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Insertion of extra debugging information used to correlate between
-    machine instructions, [Linear] and [Cfg] code. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val get_linear_file : string -> string
+(** Miscellaneous utility functions on [Linear] code. *)
 
-val add_discriminator : Debuginfo.t -> string -> int -> Debuginfo.t
+type labelled_insn = {
+  label : Label.t;
+  insn : Linear.instruction;
+}
+
+val labelled_insn_end : labelled_insn
+
+val has_label : Linear.instruction -> bool

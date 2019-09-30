@@ -12,11 +12,37 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Insertion of extra debugging information used to correlate between
-    machine instructions, [Linear] and [Cfg] code. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val get_linear_file : string -> string
+type t
 
-val add_discriminator : Debuginfo.t -> string -> int -> Debuginfo.t
+val create
+   : Cfg.t
+  -> layout:Label.t list
+  -> trap_depths:int Label.Tbl.t
+  -> trap_labels:Label.t Label.Tbl.t
+  -> preserve_orig_labels:bool
+  -> new_labels:Label.Set.t
+  -> t
+
+val cfg : t -> Cfg.t
+
+val layout : t -> Label.t list
+
+val trap_depths : t -> int Label.Tbl.t
+
+val trap_labels : t -> Label.t Label.Tbl.t
+
+val preserve_orig_labels : t -> bool
+
+val new_labels : t -> Label.Set.t
+
+val set_layout : t -> layout:Label.t list -> unit
+
+val filter_trap_labels : t -> f:(pushtrap_lbl:Label.t -> bool) -> unit
+
+val remove_from_trap_depths : t -> Label.t -> unit
+
+val remove_from_new_labels : t -> Label.t -> unit
+
+val is_trap_handler : t -> Label.t -> bool
