@@ -1,5 +1,6 @@
 (lang dune 1.11)
 (using fmt 1.1)
+(name ocamlcfg)
 (package
  (name ocamlcfg)
  (synopsis "Compiler library for building Control Flow Graph (CFG) for OCaml")
