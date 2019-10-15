@@ -12,7 +12,7 @@ build: [
 ]
 depends: [
   "ocaml" {>= "4.08"}
-  "dune" {build & >= "1.11"}
+  "dune" {build & >= "1.8"}
 ]
 synopsis: "Compiler library for building Control Flow Graph (CFG) for OCaml"
 description: "A library for converting from
