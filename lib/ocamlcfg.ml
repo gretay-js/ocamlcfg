@@ -12,11 +12,26 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Insertion of extra debugging information used to correlate between
-    machine instructions, [Linear] and [Cfg] code. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val get_linear_file : string -> string
+module Cfg = struct
+  include Cfg
 
-val add_discriminator : Debuginfo.t -> string -> int -> Debuginfo.t
+  module Basic_block = struct
+    type t = basic_block
+
+    let start t = t.start
+    let body t = t.body
+    let terminator t = t.terminator
+    let predecessors t = t.predecessors
+  end
+
+  let iter_blocks t ~f = Label.Tbl.iter f t.blocks
+  let fun_name t = t.fun_name
+  let entry_label t = t.entry_label
+  let fun_tailrec_entry_point_label t = t.fun_tailrec_entry_point_label
+end
+
+module Cfg_with_layout = Cfg_with_layout
+module Eliminate_dead_blocks = Eliminate_dead_blocks
+module Eliminate_fallthrough_blocks = Eliminate_fallthrough_blocks

@@ -12,11 +12,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Insertion of extra debugging information used to correlate between
-    machine instructions, [Linear] and [Cfg] code. *)
-
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val get_linear_file : string -> string
-
-val add_discriminator : Debuginfo.t -> string -> int -> Debuginfo.t
+(** Remove a block from a CFG.
+    The block must either have no predecessors or at most one successor. *)
+val disconnect
+   : Cfg_with_layout.t
+  -> Label.t
+  -> unit

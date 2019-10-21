@@ -12,11 +12,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Insertion of extra debugging information used to correlate between
-    machine instructions, [Linear] and [Cfg] code. *)
+(** In-place disconnection of fallthrough blocks in a CFG. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val get_linear_file : string -> string
-
-val add_discriminator : Debuginfo.t -> string -> int -> Debuginfo.t
+val fallthrough_blocks : Cfg_with_layout.t -> unit

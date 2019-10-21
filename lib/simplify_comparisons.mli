@@ -11,4 +11,9 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
+
+(* Simplify comparison operations. *)
+
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
 val disjunction : Cfg.condition -> Cfg.condition -> Cfg.condition list
