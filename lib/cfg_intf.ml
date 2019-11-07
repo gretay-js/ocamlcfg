@@ -110,3 +110,5 @@ module S = struct
     | Raise of Cmm.raise_kind
     | Tailcall of tail_call_operation
 end
+
+(* CR-soon gyorsh: Switch can be translated to Branch. *)

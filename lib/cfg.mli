@@ -20,6 +20,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+val verbose : bool ref
+
 include module type of struct
   include Cfg_intf.S
 end
@@ -36,21 +38,18 @@ type basic_block =
     mutable predecessors : Label.Set.t
   }
 
-val print_terminator : Format.formatter -> terminator instruction -> unit
-
-(* CR-soon gyorsh: Switch can be translated to Branch. *)
-
-(* CR mshinwell: It should be easy to make this abstract now *)
-
 (** Control Flow Graph of a function. *)
 type t = private
   { blocks : basic_block Label.Tbl.t;  (** Map from labels to blocks *)
     fun_name : string;  (** Function name, used for printing messages *)
     entry_label : Label.t;
         (** This label must be the first in all layouts of this cfg. *)
-    mutable fun_tailrec_entry_point_label : Label.t
+    mutable fun_tailrec_entry_point_label : Label.t;
         (** When a [Prologue] is absent, this is the same as [entry_label].
             Otherwise, the [Prologue] falls through to this label. *)
+    mutable id_to_label : Label.t Numbers.Int.Map.t
+        (** Map id of instruction to label of the block that contains the
+            instruction. Used for mapping perf data back to linear IR. *)
   }
 
 val create : fun_name:string -> fun_tailrec_entry_point_label:Label.t -> t
@@ -74,3 +73,15 @@ val get_block : t -> Label.t -> basic_block option
 val get_block_exn : t -> Label.t -> basic_block
 
 val set_fun_tailrec_entry_point_label : t -> Label.t -> unit
+
+val iter_blocks : t -> f:(Label.t -> basic_block -> unit) -> unit
+
+val compute_id_to_label : t -> unit
+
+val id_to_label : t -> int -> Label.t option
+
+(* printing *)
+
+val print_terminator : out_channel -> terminator instruction -> unit
+
+val print_basic : out_channel -> basic instruction -> unit

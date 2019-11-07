@@ -16,4 +16,4 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val fallthrough_blocks : Cfg_with_layout.t -> unit
+val run : Cfg_with_layout.t -> unit

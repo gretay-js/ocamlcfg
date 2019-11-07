@@ -16,14 +16,14 @@
 
 type t
 
-val create
-   : Cfg.t
-  -> layout:Label.t list
-  -> trap_depths:int Label.Tbl.t
-  -> trap_labels:Label.t Label.Tbl.t
-  -> preserve_orig_labels:bool
-  -> new_labels:Label.Set.t
-  -> t
+val create :
+  Cfg.t ->
+  layout:Label.t list ->
+  trap_depths:int Label.Tbl.t ->
+  trap_labels:Label.t Label.Tbl.t ->
+  preserve_orig_labels:bool ->
+  new_labels:Label.Set.t ->
+  t
 
 val cfg : t -> Cfg.t
 
@@ -37,7 +37,7 @@ val preserve_orig_labels : t -> bool
 
 val new_labels : t -> Label.Set.t
 
-val set_layout : t -> layout:Label.t list -> unit
+val set_layout : t -> Label.t list -> unit
 
 val filter_trap_labels : t -> f:(pushtrap_lbl:Label.t -> bool) -> unit
 
@@ -46,3 +46,7 @@ val remove_from_trap_depths : t -> Label.t -> unit
 val remove_from_new_labels : t -> Label.t -> unit
 
 val is_trap_handler : t -> Label.t -> bool
+
+val print_dot : t -> ?show_instr:bool -> string -> unit
+
+val print : t -> out_channel -> string -> unit

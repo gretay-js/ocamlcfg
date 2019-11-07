@@ -11,3 +11,4 @@ field-space=loose
 doc-comments=before
 # break-fun-decl=smart
 type-decl=sparse
+
