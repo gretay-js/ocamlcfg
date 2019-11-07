@@ -17,18 +17,18 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Cfg : sig
-  include Cfg_intf.S
-
-  (* CR mshinwell for gyorsh (per request): check that the other types
-     (and modules) are not accessible. *)
+  include module type of Cfg_intf.S
 
   module Basic_block : sig
     (** The implementation of type [t] is a mutable structure. *)
     type t
 
     val start : t -> Label.t
+
     val body : t -> basic instruction list
+
     val terminator : t -> terminator instruction
+
     val predecessors : t -> Label.Set.t
   end
 
@@ -53,7 +53,7 @@ module Cfg_with_layout : sig
   val cfg : t -> Cfg.t
 
   val layout : t -> Label.t list
-  
+
   val set_layout : t -> layout:Label.t list -> unit
 
   (* CR mshinwell: Interface to determine if a block is a trap handler? *)
