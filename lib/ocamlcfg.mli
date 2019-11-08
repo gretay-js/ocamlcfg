@@ -17,34 +17,40 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module Cfg : sig
-  include Cfg_intf.S
-
-  (* CR mshinwell for gyorsh (per request): check that the other types
-     (and modules) are not accessible. *)
+  include module type of struct
+    include Cfg_intf.S
+  end
 
   module Basic_block : sig
     (** The implementation of type [t] is a mutable structure. *)
     type t
 
     val start : t -> Label.t
+
     val body : t -> basic instruction list
+
     val terminator : t -> terminator instruction
+
     val predecessors : t -> Label.Set.t
   end
 
   (** The implementation of type [t] is a mutable structure. *)
   type t
 
-  (* CR mshinwell: Put [print] here *)
-
   (* CR mshinwell: we need more methods here, e.g. find *)
   val iter_blocks : t -> f:(Label.t -> Basic_block.t -> unit) -> unit
+
+  val get_block : t -> Label.t -> Basic_block.t option
+
+  val successor_labels : t -> Basic_block.t -> Label.t list
 
   val fun_name : t -> string
 
   val entry_label : t -> Label.t
 
   val fun_tailrec_entry_point_label : t -> Label.t
+
+  val id_to_label : t -> int -> Label.t option
 end
 
 module Cfg_with_layout : sig
@@ -53,16 +59,25 @@ module Cfg_with_layout : sig
   val cfg : t -> Cfg.t
 
   val layout : t -> Label.t list
-  
-  val set_layout : t -> layout:Label.t list -> unit
+
+  val set_layout : t -> Label.t list -> unit
+
+  val print_dot : t -> ?show_instr:bool -> string -> unit
+
+  val print : t -> out_channel -> string -> unit
+
+  val preserve_orig_labels : t -> bool
+
+  val eliminate_dead_blocks : t -> unit
+
+  (** eliminate fallthrough implies dead block elimination *)
+  val eliminate_fallthrough_blocks : t -> unit
+
+  val of_linear : Linear.fundecl -> preserve_orig_labels:bool -> t
+
+  val to_linear : t -> extra_debug:bool -> Linear.instruction
 
   (* CR mshinwell: Interface to determine if a block is a trap handler? *)
 end
 
-module Eliminate_fallthrough_blocks : sig
-  val fallthrough_blocks : Cfg_with_layout.t -> unit
-end
-
-module Eliminate_dead_blocks : sig
-  val dead_blocks : Cfg_with_layout.t -> unit
-end
+val verbose : bool ref

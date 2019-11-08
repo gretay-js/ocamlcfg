@@ -21,17 +21,26 @@ module Cfg = struct
     type t = basic_block
 
     let start t = t.start
+
     let body t = t.body
+
     let terminator t = t.terminator
+
     let predecessors t = t.predecessors
   end
-
-  let iter_blocks t ~f = Label.Tbl.iter f t.blocks
-  let fun_name t = t.fun_name
-  let entry_label t = t.entry_label
-  let fun_tailrec_entry_point_label t = t.fun_tailrec_entry_point_label
 end
 
-module Cfg_with_layout = Cfg_with_layout
-module Eliminate_dead_blocks = Eliminate_dead_blocks
-module Eliminate_fallthrough_blocks = Eliminate_fallthrough_blocks
+module Cfg_with_layout = struct
+  include Cfg_with_layout
+
+  let eliminate_dead_blocks = Eliminate_dead_blocks.run
+
+  (* eliminate fallthrough implies dead block elimination *)
+  let eliminate_fallthrough_blocks = Eliminate_fallthrough_blocks.run
+
+  let of_linear = Linear_to_cfg.run
+
+  let to_linear = Cfg_to_linear.run
+end
+
+let verbose = Cfg.verbose
