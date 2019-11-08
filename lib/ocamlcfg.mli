@@ -37,7 +37,6 @@ module Cfg : sig
   (** The implementation of type [t] is a mutable structure. *)
   type t
 
-  (* CR mshinwell: we need more methods here, e.g. find *)
   val iter_blocks : t -> f:(Label.t -> Basic_block.t -> unit) -> unit
 
   val get_block : t -> Label.t -> Basic_block.t option
@@ -75,7 +74,9 @@ module Cfg_with_layout : sig
 
   val of_linear : Linear.fundecl -> preserve_orig_labels:bool -> t
 
-  val to_linear : t -> extra_debug:bool -> Linear.instruction
+  val to_linear : t -> Linear.instruction
+
+  val add_extra_debug : t -> file:string -> unit
 
   (* CR mshinwell: Interface to determine if a block is a trap handler? *)
 end

@@ -15,8 +15,6 @@
 (** Insertion of extra debugging information used to correlate between
     machine instructions, [Linear] and [Cfg] code. *)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
-
-val get_linear_file : string -> string
-
-val add_discriminator : Debuginfo.t -> string -> int -> Debuginfo.t
+(** Adds the id of each cfg instruction into debug info of each instruction,
+    encoded as line number into the [file]. *)
+val add : Cfg_with_layout.t -> file:string -> unit

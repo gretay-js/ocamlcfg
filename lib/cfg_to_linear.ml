@@ -18,20 +18,12 @@ module C = Cfg
 module CL = Cfg_with_layout
 module L = Linear
 
-let to_linear_instr ?extra_debug ?(like : _ Cfg.instruction option) desc
-    ~next : L.instruction =
-  let dbg =
+let to_linear_instr ?(like : _ Cfg.instruction option) desc ~next :
+    L.instruction =
+  let arg, res, dbg, live =
     match like with
-    | None -> Debuginfo.none
-    | Some like -> (
-        match extra_debug with
-        | None -> like.dbg
-        | Some file -> Extra_debug.add_discriminator like.dbg file like.id )
-  in
-  let arg, res, live =
-    match like with
-    | None -> ([||], [||], Reg.Set.empty)
-    | Some like -> (like.arg, like.res, like.live)
+    | None -> ([||], [||], Debuginfo.none, Reg.Set.empty)
+    | Some like -> (like.arg, like.res, like.dbg, like.live)
   in
   { desc; next; arg; res; dbg; live }
 
@@ -90,12 +82,11 @@ let from_basic (basic : C.basic) : L.instruction_desc =
       in
       Lop op
 
-let basic_to_linear ?extra_debug (i : _ C.instruction) ~next =
+let basic_to_linear (i : _ C.instruction) ~next =
   let desc = from_basic i.desc in
-  to_linear_instr ?extra_debug ~like:i desc ~next
+  to_linear_instr ~like:i desc ~next
 
-let linearize_terminator cfg ?extra_debug
-    (terminator : C.terminator C.instruction)
+let linearize_terminator cfg (terminator : C.terminator C.instruction)
     ~(next : Linear_utils.labelled_insn) =
   let desc_list =
     match terminator.desc with
@@ -148,8 +139,7 @@ let linearize_terminator cfg ?extra_debug
             Misc.fatal_errorf "Malformed branch %s" reason )
   in
   List.fold_left
-    (fun next desc ->
-      to_linear_instr ?extra_debug ~like:terminator desc ~next)
+    (fun next desc -> to_linear_instr ~like:terminator desc ~next)
     next.insn (List.rev desc_list)
 
 let need_starting_label (cfg_with_layout : CL.t) (block : C.basic_block)
@@ -194,12 +184,8 @@ let adjust_trap_depth cfg_with_layout body (block : C.basic_block)
 
 (* CR-soon gyorsh: handle duplicate labels in new layout: print the same
    block more than once. *)
-let run cfg_with_layout ~extra_debug =
+let run cfg_with_layout =
   let cfg = CL.cfg cfg_with_layout in
-  let extra_debug =
-    if extra_debug then Some (Extra_debug.get_linear_file (C.fun_name cfg))
-    else None
-  in
   let layout = Array.of_list (CL.layout cfg_with_layout) in
   let len = Array.length layout in
   let next = ref Linear_utils.labelled_insn_end in
@@ -211,10 +197,10 @@ let run cfg_with_layout ~extra_debug =
     assert (label = block.start);
     let body =
       let terminator =
-        linearize_terminator cfg ?extra_debug block.terminator ~next:!next
+        linearize_terminator cfg block.terminator ~next:!next
       in
       List.fold_left
-        (fun next i -> basic_to_linear ?extra_debug i ~next)
+        (fun next i -> basic_to_linear i ~next)
         terminator (List.rev block.body)
     in
     let insn =

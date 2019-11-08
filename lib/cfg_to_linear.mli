@@ -16,4 +16,4 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val run : Cfg_with_layout.t -> extra_debug:bool -> Linear.instruction
+val run : Cfg_with_layout.t -> Linear.instruction

@@ -41,6 +41,8 @@ module Cfg_with_layout = struct
   let of_linear = Linear_to_cfg.run
 
   let to_linear = Cfg_to_linear.run
+
+  let add_extra_debug = Extra_debug.add
 end
 
 let verbose = Cfg.verbose
