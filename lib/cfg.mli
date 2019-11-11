@@ -34,16 +34,16 @@ type basic_block =
     start : Label.t;
     mutable body : basic instruction list;
     mutable terminator : terminator instruction;
-    (* all traps pushed in this block. *)
-    mutable traps : Label.Set.t;
     (* all predecessors: normal and exceptional path *)
     mutable predecessors : Label.Set.t;
     (* trap depth of the start of the block *)
     trap_depth : int;
+    (* All possible targets of raise in this block. *)
+    mutable exns : Label.Set.t
     (* is this block trap handler or not? i.e., is it an exn successor of
        another block? *)
     mutable is_trap_handler : bool;
-    mutable can_raise : bool
+    mutable can_raise : bool;
   }
 
 (** Control Flow Graph of a function. *)
