@@ -30,8 +30,6 @@ module Cfg : sig
     val body : t -> basic instruction list
 
     val terminator : t -> terminator instruction
-
-    val predecessors : t -> Label.Set.t
   end
 
   (** The implementation of type [t] is a mutable structure. *)

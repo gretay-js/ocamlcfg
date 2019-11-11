@@ -60,8 +60,6 @@ val entry_label : t -> Label.t
 
 val fun_tailrec_entry_point_label : t -> Label.t
 
-val successors : t -> basic_block -> successor list
-
 val successor_labels : t -> basic_block -> Label.t list
 
 val mem_block : t -> Label.t -> bool

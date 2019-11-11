@@ -122,7 +122,7 @@ let disconnect cfg_with_layout label =
   let block = C.get_and_remove_block_exn cfg label in
   let has_predecessors = not (Label.Set.is_empty block.predecessors) in
   let has_more_than_one_successor =
-    match Cfg.successors cfg block with
+    match Cfg.successor_labels cfg block with
     | [] | [_] -> false
     | _ :: _ -> true
   in
@@ -142,8 +142,8 @@ let disconnect cfg_with_layout label =
           block.predecessors)
     (Cfg.successor_labels cfg block);
   (* Update predecessor blocks. *)
-  ( match Cfg.successors cfg block with
-  | [(_cond, target_label)] ->
+  ( match Cfg.successor_labels cfg block with
+  | [target_label] ->
       Label.Set.iter
         (fun pred_label ->
           update_predecessor's_terminators cfg ~pred_label

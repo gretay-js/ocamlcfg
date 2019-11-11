@@ -25,8 +25,6 @@ module Cfg = struct
     let body t = t.body
 
     let terminator t = t.terminator
-
-    let predecessors t = t.predecessors
   end
 end
 
