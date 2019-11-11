@@ -26,6 +26,8 @@ module Cfg = struct
 
     let terminator t = t.terminator
   end
+
+  let successor_labels t b = success_labels t ~normal:true ~exn:false b
 end
 
 module Cfg_with_layout = struct

@@ -98,7 +98,6 @@ module S = struct
     | Op of operation
     | Call of call_operation
     | Reloadretaddr
-    | Entertrap
     | Pushtrap of { lbl_handler : Label.t }
     | Poptrap
     | Prologue

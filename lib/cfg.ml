@@ -32,7 +32,11 @@ type basic_block =
   { start : Label.t;
     mutable body : basic instruction list;
     mutable terminator : terminator instruction;
-    mutable predecessors : Label.Set.t
+    mutable traps : Label.Set.t;
+    mutable predecessors : Label.Set.t;
+    mutable trap_depth : int;
+    mutable is_trap_handler : bool;
+    mutable can_raise : bool
   }
 
 type t =
@@ -62,9 +66,13 @@ let successors t block =
       |> Array.to_list
   | Return | Raise _ | Tailcall _ -> []
 
-let successor_labels t block =
-  let _, labels = List.split (successors t block) in
-  labels
+let successor_labels t ~normal ~exn block =
+  List.concat
+    [ ( if normal then
+        let _, labels = List.split (successors t block) in
+        labels
+      else [] );
+      (if exn then Label.Set.elements block.exns else []) ]
 
 let mem_block t label = Label.Tbl.mem t.blocks label
 

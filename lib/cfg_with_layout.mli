@@ -14,16 +14,14 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type t
+type t = private
+  { cfg : Cfg.t;
+    mutable layout : Label.t list;
+    preserve_orig_labels : bool;
+    mutable new_labels : Label.Set.t
+  }
 
-val create :
-  Cfg.t ->
-  layout:Label.t list ->
-  trap_depths:int Label.Tbl.t ->
-  trap_labels:Label.t Label.Tbl.t ->
-  preserve_orig_labels:bool ->
-  new_labels:Label.Set.t ->
-  t
+val create : Cfg.t -> preserve_orig_labels:bool -> t
 
 val cfg : t -> Cfg.t
 

@@ -28,18 +28,14 @@ module CL = Cfg_with_layout
 
 let is_fallthrough_block cfg_with_layout (block : C.basic_block) =
   let cfg = CL.cfg cfg_with_layout in
-  let successor_labels = C.successor_labels cfg block in
-  match successor_labels with
-  | [] | _ :: _ :: _ -> None
-  | [target_label] -> (
-      match block.body with
-      | _ :: _ -> None
-      | [] ->
-          if
-            cfg.entry_label <> block.start
-            && not (CL.is_trap_handler cfg_with_layout block.start)
-          then Some target_label
-          else None )
+  if cfg.entry_label = block.start || block.is_trap_handler then None
+  else
+    match C.successor_labels ~normal:true ~exn:false cfg block with
+    | [] | _ :: _ :: _ -> None
+    | [target_label] -> (
+        match block.body with
+        | [] -> Some target_label
+        | _ -> None )
 
 (* CR mshinwell: The logic below looks similar in structure to
    [Eliminate_dead_blocks]. I think it would be worth trying to factor that

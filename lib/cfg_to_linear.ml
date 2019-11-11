@@ -143,43 +143,36 @@ let linearize_terminator cfg (terminator : C.terminator C.instruction)
     next.insn (List.rev desc_list)
 
 let need_starting_label (cfg_with_layout : CL.t) (block : C.basic_block)
-    ~(pred_block : C.basic_block) =
-  match Label.Set.elements block.predecessors with
-  | [] | _ :: _ :: _ -> true
-  | [pred] when pred <> pred_block.start -> true
-  | [_] -> (
-      (* This block has a single predecessor which appears in the layout
-         immediately prior to this block. *)
-      if CL.is_trap_handler cfg_with_layout block.start then
-        (* CR-someday mshinwell: This may need thinking about in conjunction
-           with Flambda 2.0, in case we generate a direct jump to an
-           exception handler, but still have that handler involved in a
-           push-trap operation. *)
-        Misc.fatal_errorf "Fallthrough from %d to trap handler %d"
-          pred_block.start block.start;
-      (* No need for the label, unless the predecessor's terminator is
-         [Switch] when the label is needed for the jump table. *)
-      (* CR-soon gyorsh: is this correct with label_after for calls? *)
-      match pred_block.terminator.desc with
-      | Switch _ -> true
-      | Branch _ ->
-          (* If the label came from the original [Linear] code, preserve it
-             for checking that the conversion from [Linear] to [Cfg] and back
-             is the identity; and for various assertions in reorder. *)
-          let new_labels = CL.new_labels cfg_with_layout in
-          CL.preserve_orig_labels cfg_with_layout
-          && not (Label.Set.mem block.start new_labels)
-      | _ -> assert false )
+    ~(prev_block : C.basic_block) =
+  if block.is_trap_handler then true
+  else
+    match Label.Set.elements block.predecessors with
+    | [] | _ :: _ :: _ -> true
+    | [pred] when pred <> prev_block.start -> true
+    | [_] -> (
+        (* This block has a single predecessor which appears in the layout
+           immediately prior to this block. *)
+        (* No need for the label, unless the predecessor's terminator is
+           [Switch] when the label is needed for the jump table. *)
+        (* CR-soon gyorsh: is this correct with label_after for calls? *)
+        match prev_block.terminator.desc with
+        | Switch _ -> true
+        | Branch _ ->
+            (* If the label came from the original [Linear] code, preserve it
+               for checking that the conversion from [Linear] to [Cfg] and
+               back is the identity; and for various assertions in reorder. *)
+            let new_labels = CL.new_labels cfg_with_layout in
+            CL.preserve_orig_labels cfg_with_layout
+            && not (Label.Set.mem block.start new_labels)
+        | _ -> assert false )
 
 let adjust_trap_depth cfg_with_layout body (block : C.basic_block)
-    ~(pred_block : C.basic_block) =
-  let block_trap_depth =
-    Label.Tbl.find (CL.trap_depths cfg_with_layout) block.start
-  in
-  let pred_trap_depth = pred_block.terminator.trap_depth in
-  if block_trap_depth = pred_trap_depth then body
+    ~(prev_block : C.basic_block) =
+  let block_trap_depth = block.trap_depth in
+  let prev_trap_depth = prev_block.terminator.trap_depth in
+  if block_trap_depth = prev_trap_depth then body
   else
-    let delta_traps = block_trap_depth - pred_trap_depth in
+    let delta_traps = block_trap_depth - prev_trap_depth in
     to_linear_instr (Ladjust_trap_depth { delta_traps }) ~next:body
 
 (* CR-soon gyorsh: handle duplicate labels in new layout: print the same
@@ -206,14 +199,14 @@ let run cfg_with_layout =
     let insn =
       if i = 0 then body (* Entry block of the function. Don't add label. *)
       else
-        let pred = layout.(i - 1) in
-        let pred_block = Label.Tbl.find cfg.blocks pred in
+        let prev = layout.(i - 1) in
+        let prev_block = Label.Tbl.find cfg.blocks prev in
         let body =
-          if not (need_starting_label cfg_with_layout block ~pred_block) then
+          if not (need_starting_label cfg_with_layout block ~prev_block) then
             body
           else to_linear_instr (Llabel block.start) ~next:body
         in
-        adjust_trap_depth cfg_with_layout body block ~pred_block
+        adjust_trap_depth cfg_with_layout body block ~prev_block
     in
     next := { label; insn }
   done;

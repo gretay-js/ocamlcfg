@@ -27,15 +27,23 @@ include module type of struct
 end
 
 type basic_block =
-  { (* CR mshinwell: Put the trap stack information here as discussed. Add
-       explicit successors for blocks containing instructions that can raise.
+  { (* CR mshinwell: Put the trap stack information here as discussed.
        Enforce the invariant that a block with an exception successor edge
        (which must always be to the label on the head of the trap stack) must
        have the same trap stack throughout its execution. *)
     start : Label.t;
     mutable body : basic instruction list;
     mutable terminator : terminator instruction;
-    mutable predecessors : Label.Set.t
+    (* all traps pushed in this block. *)
+    mutable traps : Label.Set.t;
+    (* all predecessors: normal and exceptional path *)
+    mutable predecessors : Label.Set.t;
+    (* trap depth of the start of the block *)
+    trap_depth : int;
+    (* is this block trap handler or not? i.e., is it an exn successor of
+       another block? *)
+    mutable is_trap_handler : bool;
+    mutable can_raise : bool
   }
 
 (** Control Flow Graph of a function. *)
@@ -60,7 +68,8 @@ val entry_label : t -> Label.t
 
 val fun_tailrec_entry_point_label : t -> Label.t
 
-val successor_labels : t -> basic_block -> Label.t list
+val successor_labels :
+  t -> normal:bool -> exn:bool -> basic_block -> Label.t list
 
 val mem_block : t -> Label.t -> bool
 

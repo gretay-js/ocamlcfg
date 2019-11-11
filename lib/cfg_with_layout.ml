@@ -17,23 +17,16 @@
 type t =
   { cfg : Cfg.t;
     mutable layout : Label.t list;
-    mutable trap_depths : int Label.Tbl.t;
-    mutable trap_labels : Label.t Label.Tbl.t;
     preserve_orig_labels : bool;
     mutable new_labels : Label.Set.t
   }
 
-let create cfg ~layout ~trap_depths ~trap_labels ~preserve_orig_labels
-    ~new_labels =
-  { cfg; layout; trap_depths; trap_labels; preserve_orig_labels; new_labels }
+let create cfg ~preserve_orig_labels =
+  { cfg; new_labels = Label.Set.empty; layout = []; preserve_orig_labels }
 
 let cfg t = t.cfg
 
 let layout t = t.layout
-
-let trap_depths t = t.trap_depths
-
-let trap_labels t = t.trap_labels
 
 let preserve_orig_labels t = t.preserve_orig_labels
 
