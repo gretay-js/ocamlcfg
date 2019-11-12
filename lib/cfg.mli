@@ -38,12 +38,25 @@ type basic_block =
     mutable predecessors : Label.Set.t;
     (* trap depth of the start of the block *)
     trap_depth : int;
-    (* All possible targets of raise in this block. *)
-    mutable exns : Label.Set.t
+    (* trap depth of the start of the block.
+
+       CR-soon gyorsh: After we split blocks, this will be Label.t option. *)
+    trap_handlers : Label.Set.t;
+    (* All possible targets of raise in this block: subset of trap_handlers,
+       based on instructions that can raise. *)
+    mutable exns : Label.Set.t;
     (* is this block trap handler or not? i.e., is it an exn successor of
        another block? *)
     mutable is_trap_handler : bool;
-    mutable can_raise : bool;
+    (* Does this block contain any instruction that can raise, such as a
+       call, bounds check, allocation, or a raise?
+
+       CR-soon gyorsh: The current implementation with multiple pushtraps in
+       each block means that raise can go to different trap_handlers
+       associated with the block, depending on which one is on the top of the
+       stack, so this an overapproximation. After we split the blocks, this +
+       top of trap stack uniquely identifies the exn-successor of this block. *)
+    mutable can_raise : bool
   }
 
 (** Control Flow Graph of a function. *)

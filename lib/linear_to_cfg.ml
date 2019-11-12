@@ -175,7 +175,7 @@ let add_terminator t (block : C.basic_block) (i : L.instruction)
 
 (** [traps] represents the trap stack, with head being the top. *)
 let rec create_blocks t (i : L.instruction) (block : C.basic_block)
-    ~traps =
+    ~trap_depth =
   match i.desc with
   | Lend ->
       if not (block_is_registered t block) then
@@ -188,35 +188,35 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
          the label falls through, an explicit successor edge is added. *)
       if not (block_is_registered t block) then (
         let fallthrough : C.terminator = Branch [(Always, start)] in
-        block.terminator <- create_empty_instruction fallthrough ~traps;
+        block.terminator <- create_empty_instruction fallthrough ~trap_depth;
         register_block t block );
       (* CR-soon gyorsh: check for multiple consecutive labels *)
-      let new_block = create_empty_block t start ~traps in
-      create_blocks t i.next new_block ~traps
+      let new_block = create_empty_block t start ~trap_depth in
+      create_blocks t i.next new_block ~trap_depth
   | Lop (Itailcall_ind { label_after }) ->
       let desc = C.Tailcall (Func (Indirect { label_after })) in
-      add_terminator t block i desc ~traps;
-      create_blocks t i.next block ~traps
+      add_terminator t block i desc ~trap_depth;
+      create_blocks t i.next block ~trap_depth
   | Lop (Itailcall_imm { func = func_symbol; label_after }) ->
       let desc =
         if String.equal func_symbol (C.fun_name t.cfg) then
           C.Tailcall (Self { label_after })
         else C.Tailcall (Func (Direct { func_symbol; label_after }))
       in
-      add_terminator t block i desc ~traps;
-      create_blocks t i.next block ~traps
+      add_terminator t block i desc ~trap_depth;
+      create_blocks t i.next block ~trap_depth
   | Lreturn ->
       if List.length traps <> 0 || Option.is_some trap then
         Misc.fatal_errorf "Trap depth must be zero at Lreturn";
-      add_terminator t block i Return ~traps;
-      create_blocks t i.next block ~traps
+      add_terminator t block i Return ~trap_depth;
+      create_blocks t i.next block ~trap_depth
   | Lraise kind ->
-      add_terminator t block i (Raise kind) ~traps;
-      create_blocks t i.next block ~traps
+      add_terminator t block i (Raise kind) ~trap_depth;
+      create_blocks t i.next block ~trap_depth
   | Lbranch lbl ->
       if !C.verbose then Printf.printf "Lbranch %d\n" lbl;
-      add_terminator t block i (Branch [(Always, lbl)]) ~traps;
-      create_blocks t i.next block ~traps
+      add_terminator t block i (Branch [(Always, lbl)]) ~trap_depth;
+      create_blocks t i.next block ~trap_depth
   | Lcondbranch (cond, lbl) ->
       (* CR-soon gyorsh: merge (Lbranch | Lcondbranch | Lcondbranch3)+ into a
          single terminator when the argments are the same. Enables reordering
@@ -235,21 +235,21 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       add_terminator t block i
         (Branch
            [(Test cond, lbl); (Test (L.invert_test cond), fallthrough.label)])
-        ~traps;
-      create_blocks t fallthrough.insn block ~traps
+        ~trap_depth;
+      create_blocks t fallthrough.insn block ~trap_depth
   | Lcondbranch3 (lbl0, lbl1, lbl2) ->
       let fallthrough = get_or_make_label t i.next in
       let get_dest lbl = Option.value lbl ~default:fallthrough.label in
       let s0 = (C.Test (Iinttest_imm (Iunsigned Clt, 1)), get_dest lbl0) in
       let s1 = (C.Test (Iinttest_imm (Iunsigned Ceq, 1)), get_dest lbl1) in
       let s2 = (C.Test (Iinttest_imm (Iunsigned Cgt, 1)), get_dest lbl2) in
-      add_terminator t block i (Branch [s0; s1; s2]) ~traps;
-      create_blocks t fallthrough.insn block ~traps
+      add_terminator t block i (Branch [s0; s1; s2]) ~trap_depth;
+      create_blocks t fallthrough.insn block ~trap_depth
   | Lswitch labels ->
       (* CR-soon gyorsh: get rid of switches entirely and re-generate them
          based on optimization and perf data? *)
-      add_terminator t block i (Switch labels) ~traps;
-      create_blocks t i.next block ~traps
+      add_terminator t block i (Switch labels) ~trap_depth;
+      create_blocks t i.next block ~trap_depth
   | Ladjust_trap_depth { delta_traps } ->
       (* We do not emit any executable code for this insn; it only moves the
          virtual stack pointer in the emitter. We do not have a corresponding
@@ -370,7 +370,7 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
      functions. *)
   let entry_block = create_empty_block t t.cfg.entry_label ~trap_depth:0 in
   last_linear_id := entry_id;
-  create_blocks t f.fun_body entry_block ~trap_depth:0 ~traps:[];
+  create_blocks t f.fun_body entry_block ~trap_depth:0;
   (* Register predecessors now rather than during cfg construction, because
      of forward jumps: the blocks do not exist when the jump that reference
      them is processed. *)
