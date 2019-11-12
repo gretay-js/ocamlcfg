@@ -31,7 +31,6 @@ let from_basic (basic : C.basic) : L.instruction_desc =
   match basic with
   | Prologue -> Lprologue
   | Reloadretaddr -> Lreloadretaddr
-  | Entertrap -> Lentertrap
   | Pushtrap { lbl_handler } -> Lpushtrap { lbl_handler }
   | Poptrap -> Lpoptrap
   | Call (F (Indirect { label_after })) -> Lop (Icall_ind { label_after })
@@ -166,7 +165,7 @@ let need_starting_label (cfg_with_layout : CL.t) (block : C.basic_block)
             && not (Label.Set.mem block.start new_labels)
         | _ -> assert false )
 
-let adjust_trap_depth cfg_with_layout body (block : C.basic_block)
+let adjust_trap_depth body (block : C.basic_block)
     ~(prev_block : C.basic_block) =
   let block_trap_depth = block.trap_depth in
   let prev_trap_depth = prev_block.terminator.trap_depth in
@@ -199,6 +198,10 @@ let run cfg_with_layout =
     let insn =
       if i = 0 then body (* Entry block of the function. Don't add label. *)
       else
+        let body =
+          if block.is_trap_handler then to_linear_instr Lentertrap ~next:body
+          else body
+        in
         let prev = layout.(i - 1) in
         let prev_block = Label.Tbl.find cfg.blocks prev in
         let body =
@@ -206,7 +209,7 @@ let run cfg_with_layout =
             body
           else to_linear_instr (Llabel block.start) ~next:body
         in
-        adjust_trap_depth cfg_with_layout body block ~prev_block
+        adjust_trap_depth body block ~prev_block
     in
     next := { label; insn }
   done;

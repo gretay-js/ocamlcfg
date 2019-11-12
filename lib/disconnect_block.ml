@@ -122,7 +122,7 @@ let disconnect cfg_with_layout label =
   let block = C.get_and_remove_block_exn cfg label in
   let has_predecessors = not (Label.Set.is_empty block.predecessors) in
   let has_more_than_one_successor =
-    match Cfg.successor_labels cfg block with
+    match Cfg.successor_labels ~normal:true ~exn:true cfg block with
     | [] | [_] -> false
     | _ :: _ -> true
   in
@@ -140,9 +140,9 @@ let disconnect cfg_with_layout label =
         Label.Set.union
           (Label.Set.remove label succ_block.predecessors)
           block.predecessors)
-    (Cfg.successor_labels cfg block);
+    (Cfg.successor_labels ~normal:true ~exn:true cfg block);
   (* Update predecessor blocks. *)
-  ( match Cfg.successor_labels cfg block with
+  ( match Cfg.successor_labels ~normal:true ~exn:true cfg block with
   | [target_label] ->
       Label.Set.iter
         (fun pred_label ->
@@ -154,15 +154,6 @@ let disconnect cfg_with_layout label =
   let layout = CL.layout cfg_with_layout in
   let new_layout = List.filter (fun l -> l <> label) layout in
   CL.set_layout cfg_with_layout new_layout;
-  (* CR mshinwell: I don't think this property will necessarily hold in the
-     future. *)
-  (* If the dead block contains [Pushtrap], its handler becomes dead. Find
-     all occurrences of the label in trap_labels and remove them. *)
-  (* CR mshinwell: This next part doesn't seem to actually remove the trap
-     handler blocks. (Also, should it remove trap handlers transitively?) *)
-  CL.filter_trap_labels cfg_with_layout ~f:(fun ~pushtrap_lbl ->
-      pushtrap_lbl <> label);
-  CL.remove_from_trap_depths cfg_with_layout label;
   CL.remove_from_new_labels cfg_with_layout label;
   (* CR mshinwell: The next two lines should move to e.g.
      [Cfg.invalidate_block] together with an associated test for that,

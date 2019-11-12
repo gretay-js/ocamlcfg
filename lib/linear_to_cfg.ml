@@ -16,6 +16,7 @@
 
 module C = Cfg
 module L = Linear
+module T = Trap_stack
 
 type t =
   { cfg : Cfg.t;
@@ -25,8 +26,17 @@ type t =
     (* Labels added by cfg construction, except entry. Used for testing of
        the mapping back to Linear IR. *)
     mutable new_labels : Label.Set.t;
-    (* all traps pushed in this function. *)
-    mutable traps : Label.Set.t
+    (* all traps pushed in this function. used to check that all trap
+       handlers start with Entertrap, to make sure that is_trap_handler set
+       for these blocks, which is needed to convert them back to linear (and
+       restore Entertrap). *)
+    mutable trap_handlers : Label.Set.t;
+    (* Maps labels to trap handler stacks at the beginning of the block *)
+    trap_stacks : T.t Label.Tbl.t;
+    (* Maps labels to trap stacks that can be raised in that block. This
+       won't be needed after block splitting, as it will be uniquely
+       determined by the top of the trap stack. *)
+    exns : T.t list Label.Tbl.t
   }
 
 (* CR-soon gyorsh: implement CFG traversal *)
@@ -74,63 +84,100 @@ let create_instruction desc ~trap_depth (i : Linear.instruction) :
     id = get_new_linear_id ()
   }
 
-let create_empty_block t start ~trap_depth =
+let record_traps t label traps =
+  match Label.Tbl.find_opt t.trap_stacks label with
+  | None -> Label.Tbl.add t.trap_stacks label traps
+  | Some existing_traps ->
+      Label.Tbl.replace t.trap_stacks label (T.unify traps existing_traps)
+
+let record_exn t (block : C.basic_block) traps =
+  block.can_raise <- true;
+  match Label.Tbl.find_opt t.exns block.start with
+  | None -> Label.Tbl.add t.exns block.start [traps]
+  | Some ls -> Label.Tbl.replace t.exns block.start (traps :: ls)
+
+let create_empty_block t start ~trap_depth ~traps =
   let block : C.basic_block =
     { start;
       body = [];
       terminator = create_empty_instruction (C.Branch []);
-      traps = Label.Set.t;
+      trap_stack = None;
       exns = Label.Set.empty;
       predecessors = Label.Set.empty;
       trap_depth;
-      is_trap_handler = false
+      is_trap_handler = false;
+      can_raise = false
     }
   in
+  record_traps t start traps;
   if C.mem_block t.cfg start then
     Misc.fatal_errorf "A block with starting label %d is already registered"
       start;
   t.layout <- start :: t.layout;
   block
 
-let register_block t (block : C.basic_block) =
+let register_block t (block : C.basic_block) traps =
   if Label.Tbl.mem t.cfg.blocks block.start then
     Misc.fatal_errorf "A block with starting label %d is already registered"
       block.start;
-  (* Printf.printf "registering block %d\n" block.start *)
+  if !C.verbose then Printf.printf "registering block %d\n" block.start;
   (* Body is constructed in reverse, fix it now: *)
   block.body <- List.rev block.body;
-  (* CR mshinwell: Document this assertion. I think in fact this should be a
-     [fatal_errorf] since it doesn't appear to be a local property of this
-     function *)
-  assert (not (block.terminator.id = 0 && List.length block.body = 0));
+  (* Update trap stacks of successor blocks. *)
+  List.iter
+    (fun label -> record_traps t label traps)
+    (C.successor_labels t.cfg ~normal:true ~exn:false block);
   Label.Tbl.add t.cfg.blocks block.start block
 
-let can_raise_basic i =
-  match i.desc with
+let can_raise_basic (i : C.basic) =
+  match i with
   | Call _ -> true
   | _ -> false
 
-let can_raise_terminator i =
-  match i.desc with
+let can_raise_terminator (i : C.terminator) =
+  match i with
   | Raise _ | Tailcall _ -> true
   | _ -> false
 
-let enter_trap i =
-  match i.desc with
-  | Entertrap -> true
-  | _ -> false
-
 let check_traps t =
-  let check label block =
-    (* check that all blocks referred to in pushtraps are marked as
-       trap_handlers *)
-    Label.Set.iter
-      (fun label ->
-        let trap_block = C.get_block_exn t label in
-        assert trap_block.is_trap_handler)
-      block.traps
+  (* check that all blocks referred to in pushtraps are marked as
+     trap_handlers *)
+  Label.Set.iter
+    (fun label ->
+      let trap_block = C.get_block_exn t.cfg label in
+      if not trap_block.is_trap_handler then
+        Misc.fatal_errorf "Label %d used in pushtrap but has no Entertrap."
+          label)
+    t.trap_handlers;
+  (* check that trap stacks of all blocks are resolved. *)
+  let f label (block : C.basic_block) =
+    match Label.Tbl.find_opt t.trap_stacks label with
+    | None -> ()
+    | Some traps -> (
+        try
+          let trap_stack = T.to_list_exn traps in
+          block.trap_stack <- Some trap_stack;
+          let d = List.length trap_stack in
+          if block.trap_depth = d then
+            Misc.fatal_errorf
+              "Malformed linear IR: mismatch trap_depth=%d,but trap_stack \
+               length=%d"
+              block.trap_depth d;
+          (* All exns in this block must be off of traps above, which was
+             successfully resolved. *)
+          match Label.Tbl.find_opt t.exns label with
+          | None -> ()
+          | Some exns ->
+              block.exns <-
+                List.filter_map T.top_exn exns |> Label.Set.of_list
+        with T.Unresolved ->
+          (* must be dead block *)
+          if !C.verbose then
+            Printf.printf
+              "unknown trap stack at label %d, the block must be dead" label
+        )
   in
-  iter_blocks t ~f:check
+  C.iter_blocks t.cfg ~f
 
 let register_predecessors_for_all_blocks t =
   Label.Tbl.iter
@@ -159,7 +206,7 @@ let block_is_registered t (block : C.basic_block) =
   Label.Tbl.mem t.cfg.blocks block.start
 
 let add_terminator t (block : C.basic_block) (i : L.instruction)
-    (desc : C.terminator) ~trap_depth =
+    (desc : C.terminator) ~trap_depth ~traps =
   ( match desc with
   (* CR mshinwell: What exactly determines which ones of these must be
      followed by a label? *)
@@ -170,12 +217,16 @@ let add_terminator t (block : C.basic_block) (i : L.instruction)
           Printlinear.instr
           { i with next = Linear.end_instr } );
   block.terminator <- create_instruction desc ~trap_depth i;
-  block.can_raise <- can_raise_terminator desc;
-  register_block t block
+  if can_raise_terminator desc then record_exn t block traps;
+  register_block t block traps
 
-(** [traps] represents the trap stack, with head being the top. *)
+(** [traps] represents the trap stack, with head being the top. [trap_depths]
+    is the depth of the trap stack. *)
 let rec create_blocks t (i : L.instruction) (block : C.basic_block)
-    ~trap_depth =
+    ~trap_depth ~traps =
+  (* [traps] is constructed incrementally, because Ladjust_trap does not give
+     enough information to compute it upfront, but trap_depth is directly
+     computed. *)
   match i.desc with
   | Lend ->
       if not (block_is_registered t block) then
@@ -189,34 +240,34 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       if not (block_is_registered t block) then (
         let fallthrough : C.terminator = Branch [(Always, start)] in
         block.terminator <- create_empty_instruction fallthrough ~trap_depth;
-        register_block t block );
+        register_block t block traps );
       (* CR-soon gyorsh: check for multiple consecutive labels *)
-      let new_block = create_empty_block t start ~trap_depth in
-      create_blocks t i.next new_block ~trap_depth
+      let new_block = create_empty_block t start ~trap_depth ~traps in
+      create_blocks t i.next new_block ~trap_depth ~traps
   | Lop (Itailcall_ind { label_after }) ->
       let desc = C.Tailcall (Func (Indirect { label_after })) in
-      add_terminator t block i desc ~trap_depth;
-      create_blocks t i.next block ~trap_depth
+      add_terminator t block i desc ~trap_depth ~traps;
+      create_blocks t i.next block ~trap_depth ~traps
   | Lop (Itailcall_imm { func = func_symbol; label_after }) ->
       let desc =
         if String.equal func_symbol (C.fun_name t.cfg) then
           C.Tailcall (Self { label_after })
         else C.Tailcall (Func (Direct { func_symbol; label_after }))
       in
-      add_terminator t block i desc ~trap_depth;
-      create_blocks t i.next block ~trap_depth
+      add_terminator t block i desc ~trap_depth ~traps;
+      create_blocks t i.next block ~trap_depth ~traps
   | Lreturn ->
-      if List.length traps <> 0 || Option.is_some trap then
+      if trap_depth <> 0 then
         Misc.fatal_errorf "Trap depth must be zero at Lreturn";
-      add_terminator t block i Return ~trap_depth;
-      create_blocks t i.next block ~trap_depth
+      add_terminator t block i Return ~trap_depth ~traps;
+      create_blocks t i.next block ~trap_depth ~traps
   | Lraise kind ->
-      add_terminator t block i (Raise kind) ~trap_depth;
-      create_blocks t i.next block ~trap_depth
+      add_terminator t block i (Raise kind) ~trap_depth ~traps;
+      create_blocks t i.next block ~trap_depth ~traps
   | Lbranch lbl ->
       if !C.verbose then Printf.printf "Lbranch %d\n" lbl;
-      add_terminator t block i (Branch [(Always, lbl)]) ~trap_depth;
-      create_blocks t i.next block ~trap_depth
+      add_terminator t block i (Branch [(Always, lbl)]) ~trap_depth ~traps;
+      create_blocks t i.next block ~trap_depth ~traps
   | Lcondbranch (cond, lbl) ->
       (* CR-soon gyorsh: merge (Lbranch | Lcondbranch | Lcondbranch3)+ into a
          single terminator when the argments are the same. Enables reordering
@@ -235,21 +286,21 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       add_terminator t block i
         (Branch
            [(Test cond, lbl); (Test (L.invert_test cond), fallthrough.label)])
-        ~trap_depth;
-      create_blocks t fallthrough.insn block ~trap_depth
+        ~trap_depth ~traps;
+      create_blocks t fallthrough.insn block ~trap_depth ~traps
   | Lcondbranch3 (lbl0, lbl1, lbl2) ->
       let fallthrough = get_or_make_label t i.next in
       let get_dest lbl = Option.value lbl ~default:fallthrough.label in
       let s0 = (C.Test (Iinttest_imm (Iunsigned Clt, 1)), get_dest lbl0) in
       let s1 = (C.Test (Iinttest_imm (Iunsigned Ceq, 1)), get_dest lbl1) in
       let s2 = (C.Test (Iinttest_imm (Iunsigned Cgt, 1)), get_dest lbl2) in
-      add_terminator t block i (Branch [s0; s1; s2]) ~trap_depth;
-      create_blocks t fallthrough.insn block ~trap_depth
+      add_terminator t block i (Branch [s0; s1; s2]) ~trap_depth ~traps;
+      create_blocks t fallthrough.insn block ~trap_depth ~traps
   | Lswitch labels ->
       (* CR-soon gyorsh: get rid of switches entirely and re-generate them
          based on optimization and perf data? *)
-      add_terminator t block i (Switch labels) ~trap_depth;
-      create_blocks t i.next block ~trap_depth
+      add_terminator t block i (Switch labels) ~trap_depth ~traps;
+      create_blocks t i.next block ~trap_depth ~traps
   | Ladjust_trap_depth { delta_traps } ->
       (* We do not emit any executable code for this insn; it only moves the
          virtual stack pointer in the emitter. We do not have a corresponding
@@ -257,31 +308,34 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
          are reordered. Instead we regenerate the instructions when
          converting back to linear. We use [delta_traps] only to compute
          [trap_depth]s of other instructions. *)
-      let trap_depth = List.length traps + delta_traps in
+      let trap_depth = trap_depth + delta_traps in
       if trap_depth < 0 then
         Misc.fatal_errorf
           "Ladjust_trap_depth %d moves the trap depth below zero: %d"
           delta_traps trap_depth;
-      create_blocks t i.next block ~trap_depth ~trap:-1 (* fixme *)
+      let trap = ref T.Unknown in
+      create_blocks t i.next block ~trap_depth ~traps
   | Lpushtrap { lbl_handler } ->
-      t.traps <- Label.Set.add lbl_handler t.traps;
+      t.trap_handlers <- Label.Set.add lbl_handler t.trap_handlers;
+      record_traps t lbl_handler traps;
       let desc = C.Pushtrap { lbl_handler } in
       block.body <- create_instruction desc ~trap_depth i :: block.body;
       let trap_depth = trap_depth + 1 in
-      let trap = Some lbl_handler in
-      create_blocks t i.next block ~trap_depth ~trap
+      let traps = ref (T.Push (lbl_handler, traps)) in
+      create_blocks t i.next block ~trap_depth ~traps
   | Lpoptrap ->
       let desc = C.Poptrap in
       block.body <- create_instruction desc ~trap_depth i :: block.body;
       let trap_depth = trap_depth - 1 in
-      if trap_depth < 0 || Option.is_none traps then
+      if trap_depth < 0 then
         Misc.fatal_error "Lpoptrap moves the trap depth below zero";
-      create_blocks t i.next block ~trap_depth
+      let traps = ref (T.Pop traps) in
+      create_blocks t i.next block ~trap_depth ~traps
   | Lentertrap ->
       (* Must be the first one in the block. *)
       assert (List.length block.body = 0);
       block.is_trap_handler <- true;
-      create_blocks t i.next block ~trap_depth
+      create_blocks t i.next block ~trap_depth ~traps
   | desc ->
       let desc : C.basic =
         match desc with
@@ -346,12 +400,12 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
         | Lcondbranch (_, _)
         | Lcondbranch3 (_, _, _)
         | Lswitch _ | Lraise _ | Ladjust_trap_depth _ | Lpoptrap
-        | Lpushtrap _ ->
+        | Lpushtrap _ | Lentertrap ->
             assert false
       in
       block.body <- create_instruction desc i ~trap_depth :: block.body;
-      body.can_raise <- can_raise_basic desc;
-      create_blocks t i.next block ~trap_depth
+      if can_raise_basic desc then record_exn t block traps;
+      create_blocks t i.next block ~trap_depth ~traps
 
 let run (f : Linear.fundecl) ~preserve_orig_labels =
   let t =
@@ -359,7 +413,7 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
       Cfg.create ~fun_name:f.fun_name
         ~fun_tailrec_entry_point_label:f.fun_tailrec_entry_point_label
     in
-    Cfg_with_layout.create cfg preserve_orig_labels
+    create cfg ~preserve_orig_labels
   in
   (* CR-soon gyorsh: label of the function entry must not conflict with
      existing labels. Relies on the invariant: Cmm.new_label() is int > 99.
@@ -368,9 +422,13 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
      don't think a new type needs to cause any change in efficiency. A custom
      hashtable can be made with the appropriate hashing and equality
      functions. *)
-  let entry_block = create_empty_block t t.cfg.entry_label ~trap_depth:0 in
+  let traps = T.Emp in
+  let trap_depth = 0 in
+  let entry_block =
+    create_empty_block t t.cfg.entry_label ~trap_depth ~traps
+  in
   last_linear_id := entry_id;
-  create_blocks t f.fun_body entry_block ~trap_depth:0;
+  create_blocks t f.fun_body entry_block ~trap_depth ~traps;
   (* Register predecessors now rather than during cfg construction, because
      of forward jumps: the blocks do not exist when the jump that reference
      them is processed. *)
@@ -379,5 +437,5 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
   C.compute_id_to_label t.cfg;
   (* Layout was constructed in reverse, fix it now: *)
   t.layout <- List.rev t.layout;
-  Cfg_with_layout.create t.cfg ~layout:t.layout ~trap_depths:t.trap_depths
+  Cfg_with_layout.create t.cfg ~layout:t.layout
     ~preserve_orig_labels:t.preserve_orig_labels ~new_labels:t.new_labels

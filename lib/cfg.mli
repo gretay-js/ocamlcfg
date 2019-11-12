@@ -38,12 +38,15 @@ type basic_block =
     mutable predecessors : Label.Set.t;
     (* trap depth of the start of the block *)
     trap_depth : int;
-    (* trap depth of the start of the block.
+    (* trap stack at the start of this block. None has to be dead block.
 
-       CR-soon gyorsh: After we split blocks, this will be Label.t option. *)
-    trap_handlers : Label.Set.t;
+       Invariant: length of trap stack = trap_depth. *)
+    mutable trap_stack : Label.t list option;
     (* All possible targets of raise in this block: subset of trap_handlers,
-       based on instructions that can raise. *)
+       based on instructions that can raise. Subset of trap_handlers.
+
+       CR-soon gyorsh: After we split blocks, this will not be needed, it can
+       be inferred from top of trap stack and can_raise of the block. *)
     mutable exns : Label.Set.t;
     (* is this block trap handler or not? i.e., is it an exn successor of
        another block? *)

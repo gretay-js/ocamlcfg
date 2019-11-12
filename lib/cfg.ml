@@ -32,9 +32,10 @@ type basic_block =
   { start : Label.t;
     mutable body : basic instruction list;
     mutable terminator : terminator instruction;
-    mutable traps : Label.Set.t;
     mutable predecessors : Label.Set.t;
-    mutable trap_depth : int;
+    trap_depth : int;
+    mutable trap_stack : Label.t list option;
+    mutable exns : Label.Set.t;
     mutable is_trap_handler : bool;
     mutable can_raise : bool
   }
@@ -208,7 +209,6 @@ let print_basic oc i =
       print_call oc call;
       Printf.fprintf oc "\n"
   | Reloadretaddr -> Printf.fprintf oc "Reloadretaddr\n"
-  | Entertrap -> Printf.fprintf oc "Entertrap\n"
   | Pushtrap { lbl_handler } ->
       Printf.fprintf oc "Pushtrap handler=%d\n" lbl_handler
   | Poptrap -> Printf.fprintf oc "Poptrap\n"

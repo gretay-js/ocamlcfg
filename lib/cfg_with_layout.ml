@@ -34,22 +34,12 @@ let new_labels t = t.new_labels
 
 let set_layout t layout = t.layout <- layout
 
-let filter_trap_labels t ~f =
-  Label.Tbl.filter_map_inplace
-    (fun _trap_handler_lbl pushtrap_lbl ->
-      if f ~pushtrap_lbl then Some pushtrap_lbl else None)
-    t.trap_labels
-
-let remove_from_trap_depths t label =
-  if not (Label.Tbl.mem t.trap_depths label) then
-    Misc.fatal_errorf "No trap depth was registered for label %a" Label.print
-      label;
-  Label.Tbl.remove t.trap_depths label
-
 let remove_from_new_labels t label =
   t.new_labels <- Label.Set.remove label t.new_labels
 
-let is_trap_handler t label = Label.Tbl.mem t.trap_labels label
+let is_trap_handler t label =
+  let block = Cfg.get_block_exn t.cfg label in
+  block.is_trap_handler
 
 (* Printing utilities for debug *)
 
@@ -66,11 +56,15 @@ let print t oc msg =
     Printf.fprintf oc "\npredecessors:";
     Label.Set.iter (Printf.fprintf oc " %d") block.predecessors;
     Printf.fprintf oc "\nsuccessors:";
-    List.iter (Printf.fprintf oc " %d") (Cfg.successor_labels t.cfg block)
+    List.iter (Printf.fprintf oc " %d")
+      (Cfg.successor_labels ~normal:true ~exn:false t.cfg block);
+    Printf.fprintf oc "\nexn-successors:";
+    List.iter (Printf.fprintf oc " %d")
+      (Cfg.successor_labels ~normal:false ~exn:true t.cfg block)
   in
   List.iter print_block t.layout
 
-let print_dot t ?(show_instr = true) msg =
+let print_dot t ?(show_instr = true) ?(show_exn = true) msg =
   let filename =
     Printf.sprintf "%s%s%s.dot"
       (X86_proc.string_of_symbol "" t.cfg.fun_name)
@@ -97,7 +91,12 @@ let print_dot t ?(show_instr = true) msg =
     Printf.fprintf oc "\"]\n";
     List.iter
       (fun l -> Printf.fprintf oc "%s->%s\n" (name label) (name l))
-      (Cfg.successor_labels t.cfg block)
+      (Cfg.successor_labels ~normal:true ~exn:false t.cfg block);
+    if show_exn then
+      List.iter
+        (fun l ->
+          Printf.fprintf oc "%s->%s [style=dashed]\n" (name label) (name l))
+        (Cfg.successor_labels ~normal:false ~exn:true t.cfg block)
   in
   (* print all the blocks, even if they don't appear in the layout *)
   List.iteri
