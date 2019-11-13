@@ -51,28 +51,6 @@ let rec to_list_exn t =
       h :: to_list_exn s
   | Unknown | Pop _ -> raise Unresolved
 
-let fail () =
-  Misc.fatal_error "Malformed trap stack: mismatched pop/push trap handlers."
-
-(* Ensure we never create a cycle *)
-let rec unify s1 s2 =
-  match (!s1, !s2) with
-  | Emp, Emp -> ()
-  | Unknown, Unknown -> ()
-  | Unknown, _ -> s1 := !(rep s2)
-  | _, Unknown -> s2 := !(rep s1)
-  | Push (h1, s1), Push (h2, s2) -> if h1 = h2 then unify s1 s2 else fail ()
-  | Pop s1, Pop s2 -> unify s1 s2
-  | Pop s, _ -> (
-      match !s with
-      | Push (_, s') -> unify s' s2
-      | _ -> fail () )
-  | _, Pop s -> (
-      match !s with
-      | Push (_, s') -> unify s1 s'
-      | _ -> fail () )
-  | Emp, _ | _, Emp -> fail ()
-
 let rec print t =
   match !t with
   | Emp -> Printf.printf "emp\n"
@@ -83,3 +61,28 @@ let rec print t =
   | Pop s ->
       Printf.printf "pop::";
       print s
+
+let fail s1 s2 =
+  print s1;
+  print s2;
+  Misc.fatal_error "Malformed trap stack: mismatched pop/push trap handlers."
+
+(* Ensure we never create a cycle *)
+let rec unify s1 s2 =
+  match (!s1, !s2) with
+  | Emp, Emp -> ()
+  | Unknown, Unknown -> ()
+  | Unknown, _ -> s1 := !(rep s2)
+  | _, Unknown -> s2 := !(rep s1)
+  | Push (h1, s1), Push (h2, s2) ->
+      if h1 = h2 then unify s1 s2 else fail s1 s2
+  | Pop s1, Pop s2 -> unify s1 s2
+  | Pop s, _ -> (
+      match !s with
+      | Push (_, s') -> unify s' s2
+      | _ -> fail s1 s2 )
+  | _, Pop s -> (
+      match !s with
+      | Push (_, s') -> unify s1 s'
+      | _ -> fail s1 s2 )
+  | Emp, _ | _, Emp -> fail s1 s2
