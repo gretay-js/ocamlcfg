@@ -17,11 +17,17 @@
 type t = private
   { cfg : Cfg.t;
     mutable layout : Label.t list;
-    preserve_orig_labels : bool;
-    mutable new_labels : Label.Set.t
+    mutable new_labels : Label.Set.t;
+    (* Set for validation, unset for optimization. *)
+    preserve_orig_labels : bool
   }
 
-val create : Cfg.t -> preserve_orig_labels:bool -> t
+val create :
+  Cfg.t ->
+  layout:Label.t list ->
+  preserve_orig_labels:bool ->
+  new_labels:Label.Set.t ->
+  t
 
 val cfg : t -> Cfg.t
 

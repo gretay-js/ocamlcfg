@@ -36,7 +36,12 @@ type basic_block =
     mutable terminator : terminator instruction;
     (* all predecessors: normal and exceptional path *)
     mutable predecessors : Label.Set.t;
-    (* trap depth of the start of the block *)
+    (* trap depth of the start of the block.
+
+       CR-soon gyorsh: this can be derived from trap_stack below, except when
+       the block is dead and the trap stack is not know, represented by None.
+       Trap depth is used for cross checking the trap_stack and for emitting
+       adjust trap on exit. *)
     trap_depth : int;
     (* trap stack at the start of this block. None has to be dead block.
 
@@ -48,9 +53,6 @@ type basic_block =
        CR-soon gyorsh: After we split blocks, this will not be needed, it can
        be inferred from top of trap stack and can_raise of the block. *)
     mutable exns : Label.Set.t;
-    (* is this block trap handler or not? i.e., is it an exn successor of
-       another block? *)
-    mutable is_trap_handler : bool;
     (* Does this block contain any instruction that can raise, such as a
        call, bounds check, allocation, or a raise?
 
@@ -59,7 +61,10 @@ type basic_block =
        associated with the block, depending on which one is on the top of the
        stack, so this an overapproximation. After we split the blocks, this +
        top of trap stack uniquely identifies the exn-successor of this block. *)
-    mutable can_raise : bool
+    mutable can_raise : bool;
+    (* is this block trap handler or not? i.e., is it an exn successor of
+       another block? *)
+    mutable is_trap_handler : bool
   }
 
 (** Control Flow Graph of a function. *)

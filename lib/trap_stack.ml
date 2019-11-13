@@ -5,19 +5,34 @@ and stack =
   | Unknown
   | Push of Label.t * t
   | Pop of t
-  | Link of t
 
+(* CR-soon gyorsh: we could represent adjust trap with negative delta as pop
+   and *)
+
+(* CR-soon gyorsh: test it *)
+(* rep that shortens chains of pop;push *)
 let rec rep t =
   match !t with
-  | Link s -> rep s
-  | Push (h, s) -> ref (Push (h, rep s))
+  | Unknown -> t
+  | Emp -> t
+  | Push (_, s) ->
+      s := !(rep s);
+      t
   | Pop s -> (
       let s' = rep s in
       match !s' with
       | Push (_, s1) -> s1
-      | _ -> ref (Pop s') )
-  | Unknown -> t
-  | Emp -> t
+      | _ ->
+          s := !s';
+          t )
+
+let emp = ref Emp
+
+let unknown () = ref Unknown
+
+let pop t = rep (ref (Pop t))
+
+let push t h = ref (Push (h, rep t))
 
 exception Unresolved
 
@@ -25,42 +40,46 @@ let top_exn t =
   match !(rep t) with
   | Emp -> None
   | Push (h, _) -> Some h
-  | Unknown | Pop _ | Link _ -> raise Unresolved
+  | Unknown | Pop _ -> raise Unresolved
 
-(** Raises [Unresolved] if t contains any pop or links or Unknown. *)
+(** Raises [Unresolved] if t contains any pop or Unknown. *)
 let rec to_list_exn t =
   match !(rep t) with
   | Emp -> []
   | Push (h, s) ->
       (* This won't terminate s is a cycle back to t. *)
       h :: to_list_exn s
-  | Unknown | Pop _ | Link _ -> raise Unresolved
+  | Unknown | Pop _ -> raise Unresolved
+
+let fail () =
+  Misc.fatal_error "Malformed trap stack: mismatched pop/push trap handlers."
 
 (* Ensure we never create a cycle *)
 let rec unify s1 s2 =
   match (!s1, !s2) with
-  | Emp, Emp -> s1
-  | Unknown, _ ->
-      s1 := Link (rep s2);
-      s1
-  | _, Unknown ->
-      s2 := Link (rep s1);
-      s2
-  | Link s1, Link s2 -> unify s1 s2
-  | Link s1, _ ->
-      (* check that we are not creating a cycle *)
-      unify s1 s2
-  | _, Link s2 ->
-      (* check that we are not creating a cycle *)
-      unify s1 s2
-  | Emp, _ | _, Emp ->
-      Misc.fatal_error "Malformed trap stack: size mismatch."
-  | Push (h1, s1), Push (h2, s2) ->
-      if h1 = h2 then unify s1 s2
-      else
-        Misc.fatal_error
-          "Malformed trap stack: mismatched pushtrap handlers."
+  | Emp, Emp -> ()
+  | Unknown, Unknown -> ()
+  | Unknown, _ -> s1 := !(rep s2)
+  | _, Unknown -> s2 := !(rep s1)
+  | Push (h1, s1), Push (h2, s2) -> if h1 = h2 then unify s1 s2 else fail ()
   | Pop s1, Pop s2 -> unify s1 s2
-  | Pop _, Push _ | Push _, Pop _ ->
-      Misc.fatal_error
-        "Malformed trap stack: mismatched pushtrap or poptrap handlers."
+  | Pop s, _ -> (
+      match !s with
+      | Push (_, s') -> unify s' s2
+      | _ -> fail () )
+  | _, Pop s -> (
+      match !s with
+      | Push (_, s') -> unify s1 s'
+      | _ -> fail () )
+  | Emp, _ | _, Emp -> fail ()
+
+let rec print t =
+  match !t with
+  | Emp -> Printf.printf "emp\n"
+  | Unknown -> Printf.printf "unknown\n"
+  | Push (h, s) ->
+      Printf.printf "%d::" h;
+      print s
+  | Pop s ->
+      Printf.printf "pop::";
+      print s

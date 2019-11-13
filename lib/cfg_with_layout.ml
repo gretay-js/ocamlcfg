@@ -17,12 +17,12 @@
 type t =
   { cfg : Cfg.t;
     mutable layout : Label.t list;
-    preserve_orig_labels : bool;
-    mutable new_labels : Label.Set.t
+    mutable new_labels : Label.Set.t;
+    preserve_orig_labels : bool
   }
 
-let create cfg ~preserve_orig_labels =
-  { cfg; new_labels = Label.Set.empty; layout = []; preserve_orig_labels }
+let create cfg ~layout ~preserve_orig_labels ~new_labels =
+  { cfg; layout; new_labels; preserve_orig_labels }
 
 let cfg t = t.cfg
 

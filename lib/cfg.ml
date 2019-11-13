@@ -36,8 +36,8 @@ type basic_block =
     trap_depth : int;
     mutable trap_stack : Label.t list option;
     mutable exns : Label.Set.t;
-    mutable is_trap_handler : bool;
-    mutable can_raise : bool
+    mutable can_raise : bool;
+    mutable is_trap_handler : bool
   }
 
 type t =

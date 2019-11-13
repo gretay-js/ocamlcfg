@@ -1,13 +1,14 @@
-type t = stack ref
-
-and stack =
-  | Emp
-  | Unknown
-  | Push of Label.t * t
-  | Pop of t
-  | Link of t
+type t
 
 exception Unresolved
+
+val emp : t
+
+val unknown : unit -> t
+
+val pop : t -> t
+
+val push : t -> Label.t -> t
 
 (** Returns list representation of stack [t], with the head of the list
     representing the top of the stack. Raises [Unresolved] if the canonical
@@ -19,4 +20,8 @@ val to_list_exn : t -> Label.t list
     [Unresolved] if [t] cannot be resolved. *)
 val top_exn : t -> Label.t option
 
-val unify : t -> t -> t
+val rep : t -> t
+
+val unify : t -> t -> unit
+
+val print : t -> unit

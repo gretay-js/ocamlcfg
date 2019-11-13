@@ -21,8 +21,6 @@ module T = Trap_stack
 type t =
   { cfg : Cfg.t;
     mutable layout : Label.t list;
-    (* Set for validation, unset for optimization. *)
-    mutable preserve_orig_labels : bool;
     (* Labels added by cfg construction, except entry. Used for testing of
        the mapping back to Linear IR. *)
     mutable new_labels : Label.Set.t;
@@ -32,11 +30,30 @@ type t =
        restore Entertrap). *)
     mutable trap_handlers : Label.Set.t;
     (* Maps labels to trap handler stacks at the beginning of the block *)
+    (* CR-soon gyorsh: The need for this is because we need to record
+       trap_stack for a block that hasn't been created yet. If we change
+       create_empty_block to get_or_create, then we don't need this hashtbl
+       and will be able to store the trap_stacks directly within their nodes.
+       The advantage is after the construction is finished the stacks have
+       shared representation wrapped around the cfg, instead of the current
+       representation as a list option at each node. Shared representation
+       can save some space and also makes the representation of unknown
+       stacks the same structure as known stack rather than as option. What's
+       better? *)
     trap_stacks : T.t Label.Tbl.t;
     (* Maps labels to trap stacks that can be raised in that block. This
        won't be needed after block splitting, as it will be uniquely
        determined by the top of the trap stack. *)
     exns : T.t list Label.Tbl.t
+  }
+
+let create cfg =
+  { cfg;
+    layout = [];
+    new_labels = Label.Set.empty;
+    trap_handlers = Label.Set.empty;
+    trap_stacks = Label.Tbl.create 31;
+    exns = Label.Tbl.create 31
   }
 
 (* CR-soon gyorsh: implement CFG traversal *)
@@ -87,8 +104,7 @@ let create_instruction desc ~trap_depth (i : Linear.instruction) :
 let record_traps t label traps =
   match Label.Tbl.find_opt t.trap_stacks label with
   | None -> Label.Tbl.add t.trap_stacks label traps
-  | Some existing_traps ->
-      Label.Tbl.replace t.trap_stacks label (T.unify traps existing_traps)
+  | Some existing_traps -> T.unify traps existing_traps
 
 let record_exn t (block : C.basic_block) traps =
   block.can_raise <- true;
@@ -313,7 +329,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
         Misc.fatal_errorf
           "Ladjust_trap_depth %d moves the trap depth below zero: %d"
           delta_traps trap_depth;
-      let trap = ref T.Unknown in
+      let traps = T.unknown () in
       create_blocks t i.next block ~trap_depth ~traps
   | Lpushtrap { lbl_handler } ->
       t.trap_handlers <- Label.Set.add lbl_handler t.trap_handlers;
@@ -321,7 +337,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       let desc = C.Pushtrap { lbl_handler } in
       block.body <- create_instruction desc ~trap_depth i :: block.body;
       let trap_depth = trap_depth + 1 in
-      let traps = ref (T.Push (lbl_handler, traps)) in
+      let traps = T.push traps lbl_handler in
       create_blocks t i.next block ~trap_depth ~traps
   | Lpoptrap ->
       let desc = C.Poptrap in
@@ -329,7 +345,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       let trap_depth = trap_depth - 1 in
       if trap_depth < 0 then
         Misc.fatal_error "Lpoptrap moves the trap depth below zero";
-      let traps = ref (T.Pop traps) in
+      let traps = T.pop traps in
       create_blocks t i.next block ~trap_depth ~traps
   | Lentertrap ->
       (* Must be the first one in the block. *)
@@ -413,7 +429,7 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
       Cfg.create ~fun_name:f.fun_name
         ~fun_tailrec_entry_point_label:f.fun_tailrec_entry_point_label
     in
-    create cfg ~preserve_orig_labels
+    create cfg
   in
   (* CR-soon gyorsh: label of the function entry must not conflict with
      existing labels. Relies on the invariant: Cmm.new_label() is int > 99.
@@ -422,7 +438,7 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
      don't think a new type needs to cause any change in efficiency. A custom
      hashtable can be made with the appropriate hashing and equality
      functions. *)
-  let traps = T.Emp in
+  let traps = T.emp in
   let trap_depth = 0 in
   let entry_block =
     create_empty_block t t.cfg.entry_label ~trap_depth ~traps
@@ -436,6 +452,5 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
   check_traps t;
   C.compute_id_to_label t.cfg;
   (* Layout was constructed in reverse, fix it now: *)
-  t.layout <- List.rev t.layout;
-  Cfg_with_layout.create t.cfg ~layout:t.layout
-    ~preserve_orig_labels:t.preserve_orig_labels ~new_labels:t.new_labels
+  Cfg_with_layout.create t.cfg ~layout:(List.rev t.layout)
+    ~preserve_orig_labels ~new_labels:t.new_labels
