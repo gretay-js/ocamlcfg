@@ -62,7 +62,8 @@ let rec print t =
       Printf.printf "pop::";
       print s
 
-let fail s1 s2 =
+let fail msg s1 s2 =
+  Printf.printf "%s\n" msg;
   print s1;
   print s2;
   Misc.fatal_error "Malformed trap stack: mismatched pop/push trap handlers."
@@ -75,14 +76,14 @@ let rec unify s1 s2 =
   | Unknown, _ -> s1 := !(rep s2)
   | _, Unknown -> s2 := !(rep s1)
   | Push (h1, s1), Push (h2, s2) ->
-      if h1 = h2 then unify s1 s2 else fail s1 s2
+      if h1 = h2 then unify s1 s2 else fail "push/push" s1 s2
   | Pop s1, Pop s2 -> unify s1 s2
   | Pop s, _ -> (
       match !s with
       | Push (_, s') -> unify s' s2
-      | _ -> fail s1 s2 )
+      | _ -> fail "pop/" s1 s2 )
   | _, Pop s -> (
       match !s with
       | Push (_, s') -> unify s1 s'
-      | _ -> fail s1 s2 )
-  | Emp, _ | _, Emp -> fail s1 s2
+      | _ -> fail "/pop" s1 s2 )
+  | Emp, _ | _, Emp -> fail "emp" s1 s2
