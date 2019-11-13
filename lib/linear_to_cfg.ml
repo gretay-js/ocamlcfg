@@ -174,7 +174,7 @@ let check_traps t =
           let trap_stack = T.to_list_exn traps in
           block.trap_stack <- Some trap_stack;
           let d = List.length trap_stack in
-          if block.trap_depth = d then
+          if not (block.trap_depth = d) then
             Misc.fatal_errorf
               "Malformed linear IR: mismatch trap_depth=%d,but trap_stack \
                length=%d"
