@@ -104,7 +104,11 @@ let create_instruction desc ~trap_depth (i : Linear.instruction) :
 let record_traps t label traps =
   match Label.Tbl.find_opt t.trap_stacks label with
   | None -> Label.Tbl.add t.trap_stacks label traps
-  | Some existing_traps -> T.unify traps existing_traps
+  | Some existing_traps ->
+      T.print_pair (Printf.sprintf "Unify at %d" label) traps existing_traps;
+      T.unify traps existing_traps;
+      Printf.printf "after: ";
+      T.print existing_traps
 
 let record_exn t (block : C.basic_block) traps =
   block.can_raise <- true;

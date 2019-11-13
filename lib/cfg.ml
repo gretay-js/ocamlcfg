@@ -20,7 +20,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-let verbose = ref false
+let verbose = ref true
 
 (* CR-soon gyorsh: store label after separately and update after reordering. *)
 include Cfg_intf.S

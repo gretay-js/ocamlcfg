@@ -25,3 +25,6 @@ val rep : t -> t
 val unify : t -> t -> unit
 
 val print : t -> unit
+
+(* debug print *)
+val print_pair : string -> t -> t -> unit
