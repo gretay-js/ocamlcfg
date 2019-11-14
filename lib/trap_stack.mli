@@ -20,8 +20,6 @@ val to_list_exn : t -> Label.t list
     [Unresolved] if [t] cannot be resolved. *)
 val top_exn : t -> Label.t option
 
-val rep : t -> t
-
 val unify : t -> t -> unit
 
 val print : t -> unit

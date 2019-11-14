@@ -31,44 +31,48 @@ and stack =
 (* CR-soon gyorsh: we could represent adjust trap with negative delta as pop
    and *)
 
-(* CR-soon gyorsh: test it *)
-(* rep that shortens chains of pop;push *)
+(* rep shortens chains of pop::push *)
 let rec rep (t : t) =
   match !t with
-  | Unknown -> t
-  | Emp -> t
-  | Push p ->
-      p.t := !(rep p.t);
-      t
+  | Unknown -> ()
+  | Emp -> ()
+  | Push p -> rep p.t
   | Pop s -> (
-      let s' = rep s in
-      match !s' with
-      | Push p -> p.t
-      | _ ->
-          s := !s';
-          t )
+      rep s;
+      match !s with
+      | Push p -> t := !(p.t)
+      | _ -> () )
 
 let emp = ref Emp
 
 let unknown () = ref (Unknown : stack)
 
-let pop t = rep (ref (Pop t))
+let pop t =
+  let t = ref (Pop t) in
+  rep t;
+  t
 
-let push t h = ref (Push { h = Label h; t = rep t })
+let push t h =
+  rep t;
+  ref (Push { h = Label h; t })
 
-let push_unknown t = ref (Push { h = Unknown; t = rep t })
+let push_unknown t =
+  rep t;
+  ref (Push { h = Unknown; t })
 
 exception Unresolved
 
 let top_exn t =
-  match !(rep t) with
+  rep t;
+  match !t with
   | Emp -> None
   | Push { h = Label l; t = _ } -> Some l
   | Push { h = Unknown; t = _ } | Unknown | Pop _ -> raise Unresolved
 
 (** Raises [Unresolved] if t contains any pop or Unknown. *)
 let rec to_list_exn t =
-  match !(rep t) with
+  rep t;
+  match !t with
   | Emp -> []
   | Push { h = Label h; t } ->
       (* This won't terminate if [s] is a cycle back to [t]. *)
@@ -99,14 +103,18 @@ let fail () =
 (* If there is a cycle, this won't terminate but that's easy to debug. If
    there is no cycle, it terminates because every step decreases the
    following well-founded order: (1) removes one unknown, (2) transforms one
-   pop into push, and there is no rule that creates pop from push, or (3) -
+   pop into push, and there is no rule that creates pop from push, or (3)
    reduces the length of the stack. *)
 let rec unify s1 s2 =
   match (!s1, !s2) with
   | Emp, Emp -> ()
   | Unknown, Unknown -> ()
-  | Unknown, _ -> s1 := !(rep s2)
-  | _, Unknown -> s2 := !(rep s1)
+  | Unknown, _ ->
+      rep s2;
+      s1 := !s2
+  | _, Unknown ->
+      rep s1;
+      s2 := !s1
   | Push p1, Push p2 ->
       ( (* unify handlers *)
       match (p1.h, p2.h) with
@@ -119,16 +127,16 @@ let rec unify s1 s2 =
       | Label _, Unknown -> p2.h <- p1.h );
       unify p1.t p2.t
   | Pop s1, Pop s2 -> unify s1 s2
-  | Pop s, _ -> (
-      let s' = rep s in
-      match !s' with
-      | Push p -> unify p.t s2
-      | _ -> unify s' (push_unknown s2) )
-  | _, Pop s -> (
-      let s' = rep s in
-      match !s' with
-      | Push p -> unify s1 p.t
-      | _ -> unify (push_unknown s1) s' )
+  | Pop _, _ -> (
+      rep s1;
+      match !s1 with
+      | Pop s' -> unify s' (push_unknown s2)
+      | _ -> unify s1 s2 )
+  | _, Pop _ -> (
+      rep s2;
+      match !s2 with
+      | Pop s -> unify (push_unknown s1) s
+      | _ -> unify s1 s2 )
   | Emp, _ | _, Emp ->
       print_pair "emp" s1 s2;
       fail ()
