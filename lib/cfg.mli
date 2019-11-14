@@ -43,10 +43,6 @@ type basic_block =
        Trap depth is used for cross checking the trap_stack and for emitting
        adjust trap on exit. *)
     trap_depth : int;
-    (* trap stack at the start of this block. None has to be dead block.
-
-       Invariant: length of trap stack = trap_depth. *)
-    mutable trap_stack : Label.t list option;
     (* All possible targets of raise in this block: subset of trap_handlers,
        based on instructions that can raise. Subset of trap_handlers.
 

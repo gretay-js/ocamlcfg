@@ -33,13 +33,7 @@ type t =
     (* CR-soon gyorsh: The need for this is because we need to record
        trap_stack for a block that hasn't been created yet. If we change
        create_empty_block to get_or_create, then we don't need this hashtbl
-       and will be able to store the trap_stacks directly within their nodes.
-       The advantage is after the construction is finished the stacks have
-       shared representation wrapped around the cfg, instead of the current
-       representation as a list option at each node. Shared representation
-       can save some space and also makes the representation of unknown
-       stacks the same structure as known stack rather than as option. What's
-       better? *)
+       and will be able to store the trap_stacks directly within their nodes. *)
     trap_stacks : T.t Label.Tbl.t;
     (* Maps labels to trap stacks that can be raised in that block. This
        won't be needed after block splitting, as it will be uniquely
@@ -125,7 +119,6 @@ let create_empty_block t start ~trap_depth ~traps =
     { start;
       body = [];
       terminator = create_empty_instruction (C.Branch []);
-      trap_stack = None;
       exns = Label.Set.empty;
       predecessors = Label.Set.empty;
       trap_depth;
@@ -180,15 +173,14 @@ let check_traps t =
     | Some traps -> (
         try
           let trap_stack = T.to_list_exn traps in
-          block.trap_stack <- Some trap_stack;
           let d = List.length trap_stack in
           if not (block.trap_depth = d) then
             Misc.fatal_errorf
               "Malformed linear IR: mismatch trap_depth=%d,but trap_stack \
                length=%d"
               block.trap_depth d;
-          (* All exns in this block must be off of traps above, which was
-             successfully resolved. *)
+          (* All exns in this block must be off based on the trap_stack
+             above, which was successfully resolved. *)
           match Label.Tbl.find_opt t.exns label with
           | None -> ()
           | Some exns ->
@@ -198,8 +190,9 @@ let check_traps t =
           (* must be dead block *)
           if !C.verbose then
             Printf.printf
-              "unknown trap stack at label %d, the block must be dead" label
-        )
+              "unknown trap stack at label %d, the block must be dead, \
+               orthere is a bug in trap stacks."
+              label )
   in
   C.iter_blocks t.cfg ~f
 

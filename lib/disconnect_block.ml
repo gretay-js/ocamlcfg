@@ -155,9 +155,22 @@ let disconnect cfg_with_layout label =
   let new_layout = List.filter (fun l -> l <> label) layout in
   CL.set_layout cfg_with_layout new_layout;
   CL.remove_from_new_labels cfg_with_layout label;
+
+  (* CR-soon gyorsh: how to remove this label from block.trap_stacks of other
+     blocks? For now, trap stacks can be ignored after construction of cfg
+     from linear, and if do not eliminate trap handler, but in the new cfg,
+     trap stacks will be used instead of push/pop trap, and if trap handlers
+     can be eliminated then trap stacks would need to be updated. *)
+
   (* CR mshinwell: The next two lines should move to e.g.
      [Cfg.invalidate_block] together with an associated test for that,
      perhaps. When is such a test used? If it is not used, can we skip this
-     procedure? *)
+     procedure?
+
+     gyorsh: not sure what to do with this CR. It's a valid block but
+     detached. Once it's removed from all the data structures, it will be
+     unreachable by ocaml. Are you suggesting that it should be kept around,
+     maybe for debugging? *)
   block.terminator <- { block.terminator with desc = Branch [] };
-  block.predecessors <- Label.Set.empty
+  block.predecessors <- Label.Set.empty;
+  Label.Tbl.remove cfg.blocks block.start
