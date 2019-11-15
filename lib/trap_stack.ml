@@ -71,7 +71,7 @@ let rec to_list_exn t =
       match !(rep_h p.h) with
       | Label l ->
           (* This won't terminate if [t] has a cycle back to [t]. *)
-          l :: to_list_exn t
+          l :: to_list_exn p.t
       | Link _ -> assert false (* removed by rep_h *)
       | Unknown -> raise Unresolved )
   | Link _ -> assert false (* removed by rep *)
