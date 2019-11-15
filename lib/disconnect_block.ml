@@ -23,7 +23,7 @@ let update_predecessor's_terminators (cfg : C.t) ~pred_label
   let pred_block = Label.Tbl.find cfg.blocks pred_label in
   Cfg.replace_successor_labels cfg ~normal:true ~exn:true pred_block
     ~f:replace_label;
-  Simplify_terminator.run pred_block
+  Simplify_terminator.block pred_block
 
 let disconnect cfg_with_layout label =
   let cfg = CL.cfg cfg_with_layout in

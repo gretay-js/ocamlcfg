@@ -46,8 +46,6 @@ module Cfg : sig
   val entry_label : t -> Label.t
 
   val fun_tailrec_entry_point_label : t -> Label.t
-
-  val id_to_label : t -> int -> Label.t option
 end
 
 module Cfg_with_layout : sig
@@ -65,6 +63,7 @@ module Cfg_with_layout : sig
 
   val preserve_orig_labels : t -> bool
 
+  (** eliminate_* can call simplify_terminators *)
   val eliminate_dead_blocks : t -> unit
 
   (** eliminate fallthrough implies dead block elimination *)
@@ -74,9 +73,13 @@ module Cfg_with_layout : sig
 
   val to_linear : t -> Linear.instruction
 
-  val add_extra_debug : t -> file:string -> unit
-
   (* CR mshinwell: Interface to determine if a block is a trap handler? *)
 end
 
 val verbose : bool ref
+
+module Passes : sig
+  val add_extra_debug : Cfg.t -> file:string -> unit
+
+  val simplify_terminators : Cfg.t -> unit
+end

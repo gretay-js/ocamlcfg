@@ -17,4 +17,4 @@
 
 (** Adds the id of each cfg instruction into debug info of each instruction,
     encoded as line number into the [file]. *)
-val add : Cfg_with_layout.t -> file:string -> unit
+val add : Cfg.t -> file:string -> unit

@@ -41,6 +41,10 @@ module Cfg_with_layout = struct
   let of_linear = Linear_to_cfg.run
 
   let to_linear = Cfg_to_linear.run
+end
+
+module Passes = struct
+  let simplify_terminators = Simplify_terminator.run
 
   let add_extra_debug = Extra_debug.add
 end

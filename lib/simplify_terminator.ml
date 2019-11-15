@@ -14,7 +14,7 @@
 module C = Cfg
 module Int = Numbers.Int
 
-let run (block : C.basic_block) =
+let block (block : C.basic_block) =
   let t = block.terminator in
   match t.desc with
   | Branch successors ->
@@ -84,3 +84,5 @@ let run (block : C.basic_block) =
             }
       | _ -> () )
   | _ -> ()
+
+let run t = C.iter_blocks t ~f:(fun _ b -> block b)

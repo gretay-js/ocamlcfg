@@ -497,7 +497,6 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
      them is processed. *)
   register_predecessors_for_all_blocks t;
   check_traps t;
-  C.compute_id_to_label t.cfg;
   (* Layout was constructed in reverse, fix it now: *)
   Cfg_with_layout.create t.cfg ~layout:(List.rev t.layout)
     ~preserve_orig_labels ~new_labels:t.new_labels

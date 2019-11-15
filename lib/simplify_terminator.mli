@@ -12,5 +12,7 @@
 (*                                                                        *)
 (**************************************************************************)
 (* Merge successors that go to the same label and simplify their conditions.
-   Modifies the terminator in place *)
-val run : Cfg.basic_block -> unit
+   Modifies the terminators in place *)
+val block : Cfg.basic_block -> unit
+
+val run : Cfg.t -> unit

@@ -44,16 +44,14 @@ type t =
   { blocks : basic_block Label.Tbl.t;
     fun_name : string;
     entry_label : Label.t;
-    mutable fun_tailrec_entry_point_label : Label.t;
-    mutable id_to_label : Label.t Numbers.Int.Map.t
+    mutable fun_tailrec_entry_point_label : Label.t
   }
 
 let create ~fun_name ~fun_tailrec_entry_point_label =
   { fun_name;
     entry_label = 1;
     blocks = Label.Tbl.create 31;
-    fun_tailrec_entry_point_label;
-    id_to_label = Numbers.Int.Map.empty
+    fun_tailrec_entry_point_label
   }
 
 let successors t block =
@@ -127,34 +125,6 @@ let set_fun_tailrec_entry_point_label t label =
   t.fun_tailrec_entry_point_label <- label
 
 let iter_blocks t ~f = Label.Tbl.iter f t.blocks
-
-let id_to_label t id =
-  match Numbers.Int.Map.find_opt id t.id_to_label with
-  | None ->
-      Misc.fatal_errorf "Cannot find label for ID %d in [id_to_label]:@ %a"
-        id
-        (Numbers.Int.Map.print Label.print)
-        t.id_to_label
-  | Some lbl ->
-      if !verbose then
-        Printf.printf "Found label %d for id %d in map\n" lbl id;
-      Some lbl
-
-(* CR-soon gyorsh: if a block is eliminated after id_to_label is computed, we
-   might return a label that doesn't exist. Except that we would never ask
-   for that id because there won't be a corresponding debug line recorded in
-   perf data for it. *)
-let compute_id_to_label t =
-  let fold_block label block id_to_label =
-    let id_to_label =
-      List.fold_left
-        (fun id_to_label (i : _ instruction) ->
-          Numbers.Int.Map.add i.id label id_to_label)
-        id_to_label block.body
-    in
-    Numbers.Int.Map.add block.terminator.id label id_to_label
-  in
-  t.id_to_label <- Label.Tbl.fold fold_block t.blocks Numbers.Int.Map.empty
 
 let can_raise t =
   let res = ref false in

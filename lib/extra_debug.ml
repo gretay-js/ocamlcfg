@@ -36,5 +36,4 @@ let add t ~file =
     block.terminator <- update_t block.terminator;
     block.body <- List.map update block.body
   in
-  let cfg = Cfg_with_layout.cfg t in
-  Label.Tbl.iter update_block cfg.blocks
+  Cfg.iter_blocks t ~f:update_block
