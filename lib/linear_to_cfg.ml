@@ -162,7 +162,7 @@ let check_trap t label (block : C.basic_block) =
   | Some traps -> (
       try
         if !C.verbose then (
-          Printf.printf "check_trap at %d: " label;
+          Printf.printf "%s: check_trap at %d: " t.cfg.fun_name label;
           T.print traps );
         let trap_stack = T.to_list_exn traps in
         let d = List.length trap_stack in
@@ -176,16 +176,22 @@ let check_trap t label (block : C.basic_block) =
         match Label.Tbl.find_opt t.exns label with
         | None -> ()
         | Some exns ->
+            block.exns <- List.filter_map T.top_exn exns |> Label.Set.of_list;
             if !C.verbose then (
-              Printf.printf "exns: ";
-              List.iter T.print exns );
-            block.exns <- List.filter_map T.top_exn exns |> Label.Set.of_list
+              Printf.printf "%s: %d exn stacks at %d: " t.cfg.fun_name
+                (List.length exns) label;
+              List.iter T.print exns;
+              Printf.printf "%s: %d exns at %d: " t.cfg.fun_name
+                (Label.Set.cardinal block.exns)
+                label;
+              Label.Set.iter (Printf.printf "%d ") block.exns;
+              Printf.printf "\n" )
       with T.Unresolved ->
         (* must be dead block *)
         if !C.verbose then
           Printf.printf
-            "unknown trap stack at label %d, the block must be dead, \
-             orthere is a bug in trap stacks."
+            "unknown trap stack at label %d, the block must be dead, or \
+             there is a bug in trap stacks."
             label )
 
 let check_traps t =
