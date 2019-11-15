@@ -146,6 +146,5 @@ let rec unify s1 s2 =
 let pop t =
   let res = unknown () in
   let t' = push_unknown res in
-  print_pair "pop" t t';
   unify t t';
   res

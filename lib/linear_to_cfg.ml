@@ -359,7 +359,13 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       let trap_depth = trap_depth - 1 in
       if trap_depth < 0 then
         Misc.fatal_error "Lpoptrap moves the trap depth below zero";
+      if !C.verbose then (
+        Printf.printf "before pop: ";
+        T.print traps );
       let traps = T.pop traps in
+      if !C.verbose then (
+        Printf.printf "after pop: ";
+        T.print traps );
       create_blocks t i.next block ~trap_depth ~traps
   | Lentertrap ->
       (* Must be the first one in the block. *)
