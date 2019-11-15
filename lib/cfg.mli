@@ -44,7 +44,8 @@ type basic_block =
        adjust trap on exit. *)
     trap_depth : int;
     (* All possible targets of raise in this block: subset of trap_handlers,
-       based on instructions that can raise. Subset of trap_handlers.
+       based on instructions that can raise. Subset of trap_handlers. It does
+       not account for interproc flow of exn.
 
        CR-soon gyorsh: After we split blocks, this will not be needed, it can
        be inferred from top of trap stack and can_raise of the block. *)
@@ -85,6 +86,8 @@ val entry_label : t -> Label.t
 
 val fun_tailrec_entry_point_label : t -> Label.t
 
+(** Does not account for exceptional flow from the block that go outside of
+    the procedure. *)
 val successor_labels :
   t -> normal:bool -> exn:bool -> basic_block -> Label.t list
 

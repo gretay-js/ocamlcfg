@@ -176,7 +176,12 @@ let check_trap t label (block : C.basic_block) =
         match Label.Tbl.find_opt t.exns label with
         | None -> ()
         | Some exns ->
-            block.exns <- List.filter_map T.top_exn exns |> Label.Set.of_list;
+            let f acc l =
+              match T.top_exn l with
+              | None -> acc
+              | Some l -> Label.Set.add l acc
+            in
+            block.exns <- List.fold_left f Label.Set.empty exns;
             if !C.verbose then (
               Printf.printf "%s: %d exn stacks at %d: " t.cfg.fun_name
                 (List.length exns) label;
@@ -206,7 +211,16 @@ let check_traps t =
     t.trap_handlers;
   (* check that trap stacks of all blocks are resolved, unless the block has
      no predecessors. *)
-  C.iter_blocks t.cfg ~f:(check_trap t)
+  C.iter_blocks t.cfg ~f:(check_trap t);
+  (* after all exn successors are computed, check that if a block can_raise,
+     then it has a registered exn successor. *)
+  let f label (block : C.basic_block) =
+    let n = Label.Set.cardinal block.exns in
+    if not (block.can_raise && n > 0) then
+      Misc.fatal_errorf "Block at %d can raise but it has no exn successors"
+        label ()
+  in
+  C.iter_blocks t.cfg ~f
 
 let register_predecessors_for_all_blocks t =
   Label.Tbl.iter
