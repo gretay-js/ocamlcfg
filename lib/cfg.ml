@@ -66,13 +66,39 @@ let successors t block =
       |> Array.to_list
   | Return | Raise _ | Tailcall _ -> []
 
+let replace_successor_labels_normal t block ~f =
+  match block.terminator.desc with
+  | Branch successors ->
+      let replace_successor (cond, l) = (cond, f l) in
+      let new_successors = List.map replace_successor successors in
+      block.terminator <-
+        { block.terminator with desc = Branch new_successors }
+  | Switch labels ->
+      let new_labels = Array.map f labels in
+      block.terminator <- { block.terminator with desc = Switch new_labels }
+  | Tailcall (Self _) ->
+      t.fun_tailrec_entry_point_label <- f t.fun_tailrec_entry_point_label
+  | Return | Raise _ | Tailcall (Func _) -> ()
+
+let replace_successor_labels t ~normal ~exn block ~f =
+  if normal then replace_successor_labels_normal t block ~f;
+  if exn then block.exns <- Label.Set.map f block.exns
+
+let successor_labels_normal t block = snd (List.split (successors t block))
+
 let successor_labels t ~normal ~exn block =
-  List.concat
-    [ ( if normal then
-        let _, labels = List.split (successors t block) in
-        labels
-      else [] );
-      (if exn then Label.Set.elements block.exns else []) ]
+  (* CR gyorsh: all normal successors labels should be distinct by
+     construction but the conditions that differentiate them might not be
+     representable or during a transformation we may temporarily violate this
+     invariant, so we do not rely on it here. *)
+  match (normal, exn) with
+  | false, false -> []
+  | true, false -> successor_labels_normal t block
+  | false, true -> Label.Set.elements block.exns
+  | true, true ->
+      Label.Set.elements
+        (Label.Set.union block.exns
+           (Label.Set.of_list (successor_labels_normal t block)))
 
 let mem_block t label = Label.Tbl.mem t.blocks label
 

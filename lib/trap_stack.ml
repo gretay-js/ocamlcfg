@@ -15,82 +15,92 @@
 
 type t = stack ref
 
-and h =
-  | Unknown
-  | Label of Label.t
+and h = handler ref
 
 and stack =
   | Emp
   | Unknown
+  | Link of t
   | Push of
-      { mutable h : h;
+      { h : h;
         t : t
       }
-  | Pop of t
 
-(* CR-soon gyorsh: we could represent adjust trap with negative delta as pop
-   and *)
+and handler =
+  | Unknown
+  | Link of h
+  | Label of Label.t
 
 (* rep shortens chains of pop::push *)
 let rec rep (t : t) =
   match !t with
-  | Unknown -> ()
-  | Emp -> ()
-  | Push p -> rep p.t
-  | Pop s -> (
-      rep s;
-      match !s with
-      | Push p -> t := !(p.t)
-      | _ -> () )
+  | Link t -> rep t
+  | _ -> t
+
+let rec rep_h (h : h) =
+  match !h with
+  | Link h -> rep_h h
+  | _ -> h
 
 let emp = ref Emp
 
 let unknown () = ref (Unknown : stack)
 
-let pop t =
-  let t = ref (Pop t) in
-  rep t;
-  t
+let push t h = ref (Push { h = ref (Label h); t = rep t })
 
-let push t h =
-  rep t;
-  ref (Push { h = Label h; t })
-
-let push_unknown t =
-  rep t;
-  ref (Push { h = Unknown; t })
+let push_unknown t = ref (Push { h = ref (Unknown : handler); t = rep t })
 
 exception Unresolved
 
 let top_exn t =
-  rep t;
-  match !t with
+  match !(rep t) with
   | Emp -> None
-  | Push { h = Label l; t = _ } -> Some l
-  | Push { h = Unknown; t = _ } | Unknown | Pop _ -> raise Unresolved
+  | Push p -> (
+      match !(rep_h p.h) with
+      | Label l -> Some l
+      | Link _ -> assert false (* removed by rep_h *)
+      | Unknown -> raise Unresolved )
+  | Link _ -> assert false (* removed by rep *)
+  | Unknown -> raise Unresolved
 
 (** Raises [Unresolved] if t contains any pop or Unknown. *)
 let rec to_list_exn t =
-  rep t;
-  match !t with
+  match !(rep t) with
   | Emp -> []
-  | Push { h = Label h; t } ->
-      (* This won't terminate if [s] is a cycle back to [t]. *)
-      h :: to_list_exn t
-  | Push { h = Unknown; t = _ } | Unknown | Pop _ -> raise Unresolved
+  | Push p -> (
+      match !(rep_h p.h) with
+      | Label l ->
+          (* This won't terminate if [t] has a cycle back to [t]. *)
+          l :: to_list_exn t
+      | Link _ -> assert false (* removed by rep_h *)
+      | Unknown -> raise Unresolved )
+  | Link _ -> assert false (* removed by rep *)
+  | Unknown -> raise Unresolved
+
+let rec print_h h =
+  match !h with
+  | Label l -> Printf.printf "%d" l
+  | Link h' ->
+      Printf.printf "=";
+      print_h h'
+  | Unknown -> Printf.printf "?"
 
 let rec print t =
   match !t with
   | Emp -> Printf.printf "emp\n"
-  | Unknown -> Printf.printf "unknown\n"
-  | Push p ->
-      ( match p.h with
-      | Label l -> Printf.printf "%d::" l
-      | Unknown -> Printf.printf "?::" );
-      print p.t
-  | Pop s ->
-      Printf.printf "pop::";
+  | Unknown -> Printf.printf "??\n"
+  | Link s ->
+      Printf.printf "=";
       print s
+  | Push p ->
+      print_h p.h;
+      Printf.printf "::";
+      print p.t
+
+let print_pair_h msg h1 h2 =
+  Printf.printf "%s\n" msg;
+  print_h h1;
+  print_h h2
 
 let print_pair msg t1 t2 =
   Printf.printf "%s\n" msg;
@@ -100,6 +110,18 @@ let print_pair msg t1 t2 =
 let fail () =
   Misc.fatal_error "Malformed trap stack: mismatched pop/push trap handlers."
 
+let rec unify_h (h1 : h) (h2 : h) =
+  match (!h1, !h2) with
+  | Link h1, Link h2 -> unify_h h1 h2
+  | Link h, _ -> unify_h h h2
+  | _, Link h -> unify_h h1 h
+  | Unknown, _ -> h1 := Link h2
+  | _, Unknown -> h2 := Link h1
+  | Label l1, Label l2 ->
+      if l1 <> l2 then (
+        print_pair_h "handler labels disagree:" h1 h2;
+        fail () )
+
 (* If there is a cycle, this won't terminate but that's easy to debug. If
    there is no cycle, it terminates because every step decreases the
    following well-founded order: (1) removes one unknown, (2) transforms one
@@ -108,35 +130,22 @@ let fail () =
 let rec unify s1 s2 =
   match (!s1, !s2) with
   | Emp, Emp -> ()
-  | Unknown, Unknown -> ()
-  | Unknown, _ ->
-      rep s2;
-      s1 := !s2
-  | _, Unknown ->
-      rep s1;
-      s2 := !s1
+  | Link s1, Link s2 -> unify s1 s2
+  | Link s, _ -> unify s s2
+  | _, Link s -> unify s1 s
+  | Unknown, _ -> s1 := Link s2
+  | _, Unknown -> s2 := Link s1
   | Push p1, Push p2 ->
-      ( (* unify handlers *)
-      match (p1.h, p2.h) with
-      | Unknown, Unknown -> ()
-      | Label l1, Label l2 ->
-          if l1 <> l2 then (
-            print_pair "push/push" s1 s2;
-            fail () )
-      | Unknown, Label _ -> p1.h <- p2.h
-      | Label _, Unknown -> p2.h <- p1.h );
+      unify_h p1.h p2.h;
       unify p1.t p2.t
-  | Pop s1, Pop s2 -> unify s1 s2
-  | Pop _, _ -> (
-      rep s1;
-      match !s1 with
-      | Pop s' -> unify s' (push_unknown s2)
-      | _ -> unify s1 s2 )
-  | _, Pop _ -> (
-      rep s2;
-      match !s2 with
-      | Pop s -> unify (push_unknown s1) s
-      | _ -> unify s1 s2 )
   | Emp, _ | _, Emp ->
       print_pair "emp" s1 s2;
       fail ()
+
+(* if t = push ?:: res then pop::t = pop :: push ?:: res = res *)
+let pop t =
+  let res = unknown () in
+  let t' = push_unknown res in
+  print_pair "pop" t t';
+  unify t t';
+  res

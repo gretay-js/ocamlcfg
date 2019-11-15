@@ -88,6 +88,15 @@ val fun_tailrec_entry_point_label : t -> Label.t
 val successor_labels :
   t -> normal:bool -> exn:bool -> basic_block -> Label.t list
 
+(** In-place maps successor labels using [f]. Mutates the graph! *)
+val replace_successor_labels :
+  t ->
+  normal:bool ->
+  exn:bool ->
+  basic_block ->
+  f:(Label.t -> Label.t) ->
+  unit
+
 val mem_block : t -> Label.t -> bool
 
 val get_and_remove_block_exn : t -> Label.t -> basic_block

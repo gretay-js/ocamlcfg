@@ -59,8 +59,8 @@ let simplify_terminator (block : C.basic_block) =
       (* Find position k and label l such that label.(j) = l for all j =
          k..len-1. *)
       let len = Array.length labels in
-      assert (len > 0);
-      (* CR mshinwell: This should use [Misc.fatal_errorf] *)
+      if len < 1 then
+        Misc.fatal_error "Malform terminator: switch with empty arms";
       let l = labels.(len - 1) in
       let rec find_pos k =
         if k = 0 then 0
@@ -91,30 +91,10 @@ let simplify_terminator (block : C.basic_block) =
 
 let update_predecessor's_terminators (cfg : C.t) ~pred_label
     ~being_disconnected ~target_label =
-  let replace_label l =
-    if l <> being_disconnected then l else target_label
-  in
-  let replace_successor (cond, l) = (cond, replace_label l) in
+  let replace_label l = if l = being_disconnected then target_label else l in
   let pred_block = Label.Tbl.find cfg.blocks pred_label in
-  (* CR mshinwell: Consider adding [Cfg.map_successors]. *)
-  ( match pred_block.terminator.desc with
-  | Branch successors ->
-      let new_successors = List.map replace_successor successors in
-      pred_block.terminator <-
-        { pred_block.terminator with desc = Branch new_successors }
-  | Switch labels ->
-      let new_labels = Array.map replace_label labels in
-      pred_block.terminator <-
-        { pred_block.terminator with desc = Switch new_labels }
-  | Tailcall (Self _) ->
-      if !C.verbose then
-        Printf.printf
-          "disconnect fallthrough %d: pred.terminator=Tailcall Self entry=%d\n"
-          being_disconnected cfg.fun_tailrec_entry_point_label;
-      assert (
-        Label.equal being_disconnected cfg.fun_tailrec_entry_point_label );
-      C.set_fun_tailrec_entry_point_label cfg target_label
-  | Return | Raise _ | Tailcall (Func _) -> () );
+  Cfg.replace_successor_labels cfg ~normal:true ~exn:true pred_block
+    ~f:replace_label;
   simplify_terminator pred_block
 
 let disconnect cfg_with_layout label =
@@ -122,10 +102,9 @@ let disconnect cfg_with_layout label =
   let block = C.get_and_remove_block_exn cfg label in
   let has_predecessors = not (Label.Set.is_empty block.predecessors) in
   let has_more_than_one_successor =
-    match Cfg.successor_labels ~normal:true ~exn:true cfg block with
-    | [] | [_] -> false
-    | _ :: _ -> true
+    List.length (Cfg.successor_labels ~normal:true ~exn:true cfg block) > 1
   in
+
   if has_more_than_one_successor && has_predecessors then
     Misc.fatal_errorf
       "Cannot disconnect block %a: it has more than one successor and at \
@@ -172,5 +151,4 @@ let disconnect cfg_with_layout label =
      unreachable by ocaml. Are you suggesting that it should be kept around,
      maybe for debugging? *)
   block.terminator <- { block.terminator with desc = Branch [] };
-  block.predecessors <- Label.Set.empty;
-  Label.Tbl.remove cfg.blocks block.start
+  block.predecessors <- Label.Set.empty

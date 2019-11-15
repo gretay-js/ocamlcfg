@@ -27,6 +27,7 @@ let block_is_dead cfg_with_layout (block : C.basic_block) =
   && cfg.entry_label <> block.start
 
 let rec eliminate_dead_blocks cfg_with_layout =
+  let cfg = CL.cfg cfg_with_layout in
   if CL.preserve_orig_labels cfg_with_layout then
     Misc.fatal_error
       "Won't eliminate dead blocks when [preserve_orig_labels] is set";
@@ -34,14 +35,14 @@ let rec eliminate_dead_blocks cfg_with_layout =
     Label.Tbl.fold
       (fun label block found ->
         if block_is_dead cfg_with_layout block then label :: found else found)
-      (CL.cfg cfg_with_layout).blocks []
+      cfg.blocks []
   in
   let num_found_dead = List.length found_dead in
   if num_found_dead > 0 then (
     List.iter (Disconnect_block.disconnect cfg_with_layout) found_dead;
     if !C.verbose then (
       Printf.printf "Found and eliminated %d dead blocks in function %s.\n"
-        num_found_dead (CL.cfg cfg_with_layout).fun_name;
+        num_found_dead cfg.fun_name;
       Printf.printf "Eliminated blocks are:";
       List.iter (Printf.printf "\n%d") found_dead;
       Printf.printf "\n" );
