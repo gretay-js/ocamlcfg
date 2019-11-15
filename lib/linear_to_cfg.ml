@@ -156,6 +156,36 @@ let can_raise_terminator (i : C.terminator) =
   | Raise _ | Tailcall _ -> true
   | _ -> false
 
+let check_trap t label (block : C.basic_block) =
+  match Label.Tbl.find_opt t.trap_stacks label with
+  | None -> ()
+  | Some traps -> (
+      try
+        Printf.printf "check_trap: ";
+        T.print traps;
+        let trap_stack = T.to_list_exn traps in
+        let d = List.length trap_stack in
+        if not (block.trap_depth = d) then
+          Misc.fatal_errorf
+            "Malformed linear IR: mismatch trap_depth=%d,but trap_stack \
+             length=%d"
+            block.trap_depth d;
+        (* All exns in this block must be off based on the trap_stack above,
+           which was successfully resolved. *)
+        match Label.Tbl.find_opt t.exns label with
+        | None -> ()
+        | Some exns ->
+            Printf.printf "exns: ";
+            List.iter T.print exns;
+            block.exns <- List.filter_map T.top_exn exns |> Label.Set.of_list
+      with T.Unresolved ->
+        (* must be dead block *)
+        if !C.verbose then
+          Printf.printf
+            "unknown trap stack at label %d, the block must be dead, \
+             orthere is a bug in trap stacks."
+            label )
+
 let check_traps t =
   (* check that all blocks referred to in pushtraps are marked as
      trap_handlers *)
@@ -166,35 +196,9 @@ let check_traps t =
         Misc.fatal_errorf "Label %d used in pushtrap but has no Entertrap."
           label)
     t.trap_handlers;
-  (* check that trap stacks of all blocks are resolved. *)
-  let f label (block : C.basic_block) =
-    match Label.Tbl.find_opt t.trap_stacks label with
-    | None -> ()
-    | Some traps -> (
-        try
-          let trap_stack = T.to_list_exn traps in
-          let d = List.length trap_stack in
-          if not (block.trap_depth = d) then
-            Misc.fatal_errorf
-              "Malformed linear IR: mismatch trap_depth=%d,but trap_stack \
-               length=%d"
-              block.trap_depth d;
-          (* All exns in this block must be off based on the trap_stack
-             above, which was successfully resolved. *)
-          match Label.Tbl.find_opt t.exns label with
-          | None -> ()
-          | Some exns ->
-              block.exns <-
-                List.filter_map T.top_exn exns |> Label.Set.of_list
-        with T.Unresolved ->
-          (* must be dead block *)
-          if !C.verbose then
-            Printf.printf
-              "unknown trap stack at label %d, the block must be dead, \
-               orthere is a bug in trap stacks."
-              label )
-  in
-  C.iter_blocks t.cfg ~f
+  (* check that trap stacks of all blocks are resolved, unless the block has
+     no predecessors. *)
+  C.iter_blocks t.cfg ~f:(check_trap t)
 
 let register_predecessors_for_all_blocks t =
   Label.Tbl.iter
