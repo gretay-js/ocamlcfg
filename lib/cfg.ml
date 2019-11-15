@@ -36,6 +36,7 @@ type basic_block =
     trap_depth : int;
     mutable exns : Label.Set.t;
     mutable can_raise : bool;
+    mutable can_raise_interproc : bool;
     mutable is_trap_handler : bool
   }
 
@@ -154,6 +155,11 @@ let compute_id_to_label t =
     Numbers.Int.Map.add block.terminator.id label id_to_label
   in
   t.id_to_label <- Label.Tbl.fold fold_block t.blocks Numbers.Int.Map.empty
+
+let can_raise t =
+  let res = ref false in
+  iter_blocks t ~f:(fun _ b -> if b.can_raise_interproc then res := true);
+  !res
 
 (* Printing for debug *)
 

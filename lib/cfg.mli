@@ -59,6 +59,9 @@ type basic_block =
        stack, so this an overapproximation. After we split the blocks, this +
        top of trap stack uniquely identifies the exn-successor of this block. *)
     mutable can_raise : bool;
+    (* This block raises an exn that is not hanlderd in this function.
+       can_raise_interproc implies can_raise but not necessarily vice versa. *)
+    mutable can_raise_interproc : bool;
     (* is this block trap handler or not? i.e., is it an exn successor of
        another block? *)
     mutable is_trap_handler : bool
@@ -115,6 +118,10 @@ val iter_blocks : t -> f:(Label.t -> basic_block -> unit) -> unit
 val compute_id_to_label : t -> unit
 
 val id_to_label : t -> int -> Label.t option
+
+(** This function raises an exception that is not handled within that
+    function. *)
+val can_raise : t -> bool
 
 (* printing *)
 

@@ -123,7 +123,8 @@ let create_empty_block t start ~trap_depth ~traps =
       predecessors = Label.Set.empty;
       trap_depth;
       is_trap_handler = false;
-      can_raise = false
+      can_raise = false;
+      can_raise_interproc = false
     }
   in
   record_traps t start traps;
@@ -141,6 +142,12 @@ let register_block t (block : C.basic_block) traps =
   (* Body is constructed in reverse, fix it now: *)
   block.body <- List.rev block.body;
   (* Update trap stacks of successor blocks. *)
+  (* CR gyorsh: do we need to update traps of exns successors? what do we put
+     there? we probably need to pop traps before propagating to the handler,
+     but can it be unified at the handler? is it not the whole point that a
+     handler can be reached with different trap stacks dynamically? Should it
+     be a union stacks rather than unify them? Then, we need set of stacks
+     everywhere and how do we unify two sets? *)
   List.iter
     (fun label -> record_traps t label traps)
     (C.successor_labels t.cfg ~normal:true ~exn:false block);
@@ -178,7 +185,9 @@ let check_trap t label (block : C.basic_block) =
         | Some exns ->
             let f acc l =
               match T.top_exn l with
-              | None -> acc
+              | None ->
+                  block.can_raise_interproc <- true;
+                  acc
               | Some l -> Label.Set.add l acc
             in
             block.exns <- List.fold_left f Label.Set.empty exns;
@@ -192,7 +201,7 @@ let check_trap t label (block : C.basic_block) =
               Label.Set.iter (Printf.printf "%d ") block.exns;
               Printf.printf "\n" )
       with T.Unresolved ->
-        (* must be dead block *)
+        (* must be dead block or flow from exception handler only *)
         if !C.verbose then
           Printf.printf
             "unknown trap stack at label %d, the block must be dead, or \
@@ -213,12 +222,12 @@ let check_traps t =
      no predecessors. *)
   C.iter_blocks t.cfg ~f:(check_trap t);
   (* after all exn successors are computed, check that if a block can_raise,
-     then it has a registered exn successor. *)
-  let f label (block : C.basic_block) =
+     then it has a registered exn successor or interproc exn. *)
+  let f _ (block : C.basic_block) =
     let n = Label.Set.cardinal block.exns in
-    if not (block.can_raise && n > 0) then
-      Misc.fatal_errorf "Block at %d can raise but it has no exn successors"
-        label ()
+    assert (n >= 0);
+    assert ((not block.can_raise_interproc) || block.can_raise);
+    assert ((not block.can_raise) || n > 0 || block.can_raise_interproc)
   in
   C.iter_blocks t.cfg ~f
 
@@ -306,6 +315,10 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       add_terminator t block i Return ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lraise kind ->
+      (* CR-soon gyorsh: Why does the compiler not generate adjust after
+         raise? raise pops the trap handler stack and then the next block may
+         have a different try depth. Also, why do we not need to update
+         trap_depths and traps here like for pop? *)
       add_terminator t block i (Raise kind) ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lbranch lbl ->
