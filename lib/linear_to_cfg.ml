@@ -161,8 +161,9 @@ let check_trap t label (block : C.basic_block) =
   | None -> ()
   | Some traps -> (
       try
-        Printf.printf "check_trap: ";
-        T.print traps;
+        if !C.verbose then (
+          Printf.printf "check_trap at %d: " label;
+          T.print traps );
         let trap_stack = T.to_list_exn traps in
         let d = List.length trap_stack in
         if not (block.trap_depth = d) then
@@ -175,8 +176,9 @@ let check_trap t label (block : C.basic_block) =
         match Label.Tbl.find_opt t.exns label with
         | None -> ()
         | Some exns ->
-            Printf.printf "exns: ";
-            List.iter T.print exns;
+            if !C.verbose then (
+              Printf.printf "exns: ";
+              List.iter T.print exns );
             block.exns <- List.filter_map T.top_exn exns |> Label.Set.of_list
       with T.Unresolved ->
         (* must be dead block *)
