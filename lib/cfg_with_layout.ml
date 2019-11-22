@@ -78,8 +78,9 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) msg =
   let print_block_dot label (block : Cfg.basic_block) index =
     let name l = Printf.sprintf "\".L%d\"" l in
     let show_index = Option.value index ~default:(-1) in
-    Printf.fprintf oc "\n%s [shape=box label=\".L%d:I%d:S%d" (name label)
-      label show_index (List.length block.body);
+    Printf.fprintf oc "\n%s [shape=box label=\".L%d:I%d:S%d%s" (name label)
+      label show_index (List.length block.body)
+      (if block.is_trap_handler then ":eh" else "");
     if show_instr then (
       (* CR-someday gyorhs: Printing instruction using Printlinear doesn't
          work because of special characters like { } that need to be escaped.
@@ -92,17 +93,20 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) msg =
           Cfg.print_basic oc i;
           Printf.fprintf oc "\\l")
         block.body;
-      Cfg.print_terminator oc block.terminator;
+      Cfg.print_terminator oc ~sep:"\\l" block.terminator;
       Printf.fprintf oc "\\l" );
     Printf.fprintf oc "\"]\n";
     List.iter
       (fun l -> Printf.fprintf oc "%s->%s\n" (name label) (name l))
       (Cfg.successor_labels ~normal:true ~exn:false t.cfg block);
-    if show_exn then
+    if show_exn then (
       List.iter
         (fun l ->
           Printf.fprintf oc "%s->%s [style=dashed]\n" (name label) (name l))
-        (Cfg.successor_labels ~normal:false ~exn:true t.cfg block)
+        (Cfg.successor_labels ~normal:false ~exn:true t.cfg block);
+      if block.can_raise_interproc then
+        Printf.fprintf oc "%s->%s [style=dashed]\n" (name label)
+          "placeholder" )
   in
   (* print all the blocks, even if they don't appear in the layout *)
   List.iteri

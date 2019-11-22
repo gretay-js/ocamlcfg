@@ -219,7 +219,7 @@ let check_traps t =
           label)
     t.trap_handlers;
   (* check that trap stacks of all blocks are resolved, unless the block has
-     no predecessors. *)
+     no predecessors, and compute block.exn successors using t.exn. *)
   C.iter_blocks t.cfg ~f:(check_trap t);
   (* after all exn successors are computed, check that if a block can_raise,
      then it has a registered exn successor or interproc exn. *)
@@ -495,8 +495,8 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
   (* Register predecessors now rather than during cfg construction, because
      of forward jumps: the blocks do not exist when the jump that reference
      them is processed. *)
-  register_predecessors_for_all_blocks t;
   check_traps t;
+  register_predecessors_for_all_blocks t;
   (* Layout was constructed in reverse, fix it now: *)
   Cfg_with_layout.create t.cfg ~layout:(List.rev t.layout)
     ~preserve_orig_labels ~new_labels:t.new_labels

@@ -211,9 +211,7 @@ let print_call oc = function
 let print_basic oc i =
   Printf.fprintf oc "%d: " i.id;
   match i.desc with
-  | Op op ->
-      Printf.fprintf oc "Op ";
-      print_op oc op
+  | Op op -> print_op oc op
   | Call call ->
       Printf.fprintf oc "Call ";
       print_call oc call

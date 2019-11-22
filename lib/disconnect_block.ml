@@ -32,7 +32,7 @@ let disconnect cfg_with_layout label =
   let has_more_than_one_successor =
     List.length (Cfg.successor_labels ~normal:true ~exn:true cfg block) > 1
   in
-
+  if !C.verbose then Printf.printf "Disconnect %d in %s\n" label cfg.fun_name;
   if has_more_than_one_successor && has_predecessors then
     Misc.fatal_errorf
       "Cannot disconnect block %a: it has more than one successor and at \
