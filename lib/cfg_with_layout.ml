@@ -84,10 +84,16 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) msg =
       (* CR-someday gyorhs: Printing instruction using Printlinear doesn't
          work because of special characters like { } that need to be escaped.
          Should use sexp to print or implement a special printer. *)
-      List.iter (Cfg.print_basic oc) block.body;
       Printf.fprintf oc "\npreds:";
       Label.Set.iter (Printf.fprintf oc " %d") block.predecessors;
-      Cfg.print_terminator oc block.terminator );
+      Printf.fprintf oc "\\l";
+      List.iter
+        (fun i ->
+          Cfg.print_basic oc i;
+          Printf.fprintf oc "\\l")
+        block.body;
+      Cfg.print_terminator oc block.terminator;
+      Printf.fprintf oc "\\l" );
     Printf.fprintf oc "\"]\n";
     List.iter
       (fun l -> Printf.fprintf oc "%s->%s\n" (name label) (name l))

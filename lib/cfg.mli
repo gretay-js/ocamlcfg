@@ -118,6 +118,7 @@ val can_raise : t -> bool
 
 (* printing *)
 
-val print_terminator : out_channel -> terminator instruction -> unit
+val print_terminator :
+  out_channel -> ?sep:string -> terminator instruction -> unit
 
 val print_basic : out_channel -> basic instruction -> unit

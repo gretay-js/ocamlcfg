@@ -183,6 +183,16 @@ let print_op oc = function
   | Specific _ -> Printf.fprintf oc "specific"
   | Name_for_debugger _ -> Printf.fprintf oc "name_for_debugger"
 
+let print_test (c : Mach.test) =
+  match c with
+  | Itruetest -> "true"
+  | Ifalsetest -> "false"
+  | Iinttest ic -> intcomp ic
+  | Iinttest_imm (ic, n) -> intcomp ic ^ Int.to_string n
+  | Ifloattest fc -> Printcmm.float_comparison fc
+  | Ioddtest -> "odd"
+  | Ieventest -> "even"
+
 let print_call oc = function
   | P prim_call -> (
       match prim_call with
@@ -199,43 +209,39 @@ let print_call oc = function
 (* CR-someday: implement desc printing, and args/res/dbg, etc, properly, with
    regs, use the dreaded Format. *)
 let print_basic oc i =
-  Printf.fprintf oc "%d:\n" i.id;
+  Printf.fprintf oc "%d: " i.id;
   match i.desc with
   | Op op ->
       Printf.fprintf oc "Op ";
-      print_op oc op;
-      Printf.fprintf oc "\n"
+      print_op oc op
   | Call call ->
       Printf.fprintf oc "Call ";
-      print_call oc call;
-      Printf.fprintf oc "\n"
-  | Reloadretaddr -> Printf.fprintf oc "Reloadretaddr\n"
+      print_call oc call
+  | Reloadretaddr -> Printf.fprintf oc "Reloadretaddr"
   | Pushtrap { lbl_handler } ->
-      Printf.fprintf oc "Pushtrap handler=%d\n" lbl_handler
-  | Poptrap -> Printf.fprintf oc "Poptrap\n"
-  | Prologue -> Printf.fprintf oc "Prologue\n"
+      Printf.fprintf oc "Pushtrap handler=%d" lbl_handler
+  | Poptrap -> Printf.fprintf oc "Poptrap"
+  | Prologue -> Printf.fprintf oc "Prologue"
 
-let print_terminator oc ti =
-  Printf.fprintf oc "%d:\n" ti.id;
+let print_terminator oc ?(sep = "\n") ti =
+  Printf.fprintf oc "%d: " ti.id;
   match ti.desc with
   | Branch successors ->
-      Printf.fprintf oc "Branch with %d successors:\n"
-        (List.length successors);
+      Printf.fprintf oc "Branch with %d successors:%s"
+        (List.length successors) sep;
       List.iter
         (fun (c, l) ->
           match c with
-          | Always -> Printf.fprintf oc "goto %d\n" l
+          | Always -> Printf.fprintf oc "goto %d%s" l sep
           | Test c ->
-              let ppf = Format.formatter_of_out_channel oc in
-              Format.fprintf ppf "if %a then goto %d\n" (Printmach.test c)
-                ti.arg l)
+              Printf.fprintf oc "if %s then goto %d%s" (print_test c) l sep)
         successors
   | Switch labels ->
-      Printf.fprintf oc "switch\n";
+      Printf.fprintf oc "switch%s" sep;
       for i = 0 to Array.length labels - 1 do
-        Printf.fprintf oc "case %d: goto %d\n" i labels.(i)
+        Printf.fprintf oc "case %d: goto %d%s" i labels.(i) sep
       done
-  | Return -> Printf.fprintf oc "Return\n"
-  | Raise _ -> Printf.fprintf oc "Raise\n"
-  | Tailcall (Self _) -> Printf.fprintf oc "Tailcall self\n"
-  | Tailcall _ -> Printf.fprintf oc "Tailcall\n"
+  | Return -> Printf.fprintf oc "Return%s" sep
+  | Raise _ -> Printf.fprintf oc "Raise%s" sep
+  | Tailcall (Self _) -> Printf.fprintf oc "Tailcall self%s" sep
+  | Tailcall _ -> Printf.fprintf oc "Tailcall%s" sep
