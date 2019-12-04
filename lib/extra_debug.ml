@@ -22,7 +22,7 @@ let add_discriminator dbg file d =
   let pos = { Lexing.dummy_pos with pos_fname = file; pos_lnum = d } in
   let loc = { Location.loc_start = pos; loc_end = pos; loc_ghost = true } in
   let nd = Debuginfo.from_location loc in
-  Debuginfo.concat nd dbg
+  Debuginfo.concat dbg nd
 
 let add t ~file =
   (* CR-soon gyorsh: how to make it forall 'a ? *)
