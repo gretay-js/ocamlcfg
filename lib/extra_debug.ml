@@ -25,7 +25,7 @@ let add_discriminator dbg file d =
   Debuginfo.concat nd dbg
 
 let add t ~file =
-  (* CR gyorsh: how to make it forall 'a ? *)
+  (* CR-soon gyorsh: how to make it forall 'a ? *)
   let update (i : Cfg.basic Cfg.instruction) =
     { i with dbg = add_discriminator i.dbg file i.id }
   in
