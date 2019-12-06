@@ -86,6 +86,8 @@ val entry_label : t -> Label.t
 
 val fun_tailrec_entry_point_label : t -> Label.t
 
+val predecessors : basic_block -> Label.t list
+
 (** Does not account for exceptional flow from the block that go outside of
     the procedure. *)
 val successor_labels :

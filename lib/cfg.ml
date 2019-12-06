@@ -99,6 +99,8 @@ let successor_labels t ~normal ~exn block =
         (Label.Set.union block.exns
            (Label.Set.of_list (successor_labels_normal t block)))
 
+let predecessors block = Label.Set.elements block.predecessors
+
 let mem_block t label = Label.Tbl.mem t.blocks label
 
 let get_and_remove_block_exn t label =

@@ -41,6 +41,8 @@ module Cfg : sig
 
   val successor_labels : t -> Basic_block.t -> Label.t list
 
+  val predecessors : Basic_block.t -> Label.t list
+
   val fun_name : t -> string
 
   val entry_label : t -> Label.t
