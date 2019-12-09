@@ -14,7 +14,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module C = Cfg
 module CL = Cfg_with_layout
 module L = Linear
 
@@ -27,7 +26,7 @@ let to_linear_instr ?(like : _ Cfg.instruction option) desc ~next :
   in
   { desc; next; arg; res; dbg; live }
 
-let from_basic (basic : C.basic) : L.instruction_desc =
+let from_basic (basic : Cfg.basic) : L.instruction_desc =
   match basic with
   | Prologue -> Lprologue
   | Reloadretaddr -> Lreloadretaddr
@@ -81,11 +80,11 @@ let from_basic (basic : C.basic) : L.instruction_desc =
       in
       Lop op
 
-let basic_to_linear (i : _ C.instruction) ~next =
+let basic_to_linear (i : _ Cfg.instruction) ~next =
   let desc = from_basic i.desc in
   to_linear_instr ~like:i desc ~next
 
-let linearize_terminator cfg (terminator : C.terminator C.instruction)
+let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
     ~(next : Linear_utils.labelled_insn) =
   let desc_list =
     match terminator.desc with
@@ -104,7 +103,7 @@ let linearize_terminator cfg (terminator : C.terminator C.instruction)
             if next.label = label then [] else [L.Lbranch label]
         | [(Test cond_p, label_p); (Test cond_q, label_q)] ->
             if cond_p <> L.invert_test cond_q then (
-              C.print_terminator stderr terminator;
+              Cfg.print_terminator stderr terminator;
               Misc.fatal_error
                 "Malformed branch: conditions are not inverses of each \
                  other." );
@@ -134,15 +133,15 @@ let linearize_terminator cfg (terminator : C.terminator C.instruction)
               | [(Test _, _)] -> "successors are non-exhaustive"
               | _ -> ""
             in
-            C.print_terminator stderr terminator;
+            Cfg.print_terminator stderr terminator;
             Misc.fatal_errorf "Malformed branch %s" reason )
   in
   List.fold_left
     (fun next desc -> to_linear_instr ~like:terminator desc ~next)
     next.insn (List.rev desc_list)
 
-let need_starting_label (cfg_with_layout : CL.t) (block : C.basic_block)
-    ~(prev_block : C.basic_block) =
+let need_starting_label (cfg_with_layout : CL.t) (block : Cfg.basic_block)
+    ~(prev_block : Cfg.basic_block) =
   if block.is_trap_handler then true
   else
     match Label.Set.elements block.predecessors with
@@ -165,8 +164,8 @@ let need_starting_label (cfg_with_layout : CL.t) (block : C.basic_block)
             && not (Label.Set.mem block.start new_labels)
         | _ -> assert false )
 
-let adjust_trap_depth body (block : C.basic_block)
-    ~(prev_block : C.basic_block) =
+let adjust_trap_depth body (block : Cfg.basic_block)
+    ~(prev_block : Cfg.basic_block) =
   let block_trap_depth = block.trap_depth in
   let prev_trap_depth = prev_block.terminator.trap_depth in
   if block_trap_depth = prev_trap_depth then body
@@ -214,3 +213,37 @@ let run cfg_with_layout =
     next := { label; insn }
   done;
   !next.insn
+
+(** debug print block as assembly *)
+let print_assembly (blocks : Cfg.basic_block list) =
+  (* create a fake cfg just for printing these blocks *)
+  let layout = List.map (fun (b : Cfg.basic_block) -> b.start) blocks in
+  let fun_name = "_fun_start_" in
+  let fun_tailrec_entry_point_label = 0 in
+  let cfg = Cfg.create ~fun_name ~fun_tailrec_entry_point_label in
+  List.iter
+    (fun (block : Cfg.basic_block) ->
+      Label.Tbl.add cfg.blocks block.start block)
+    blocks;
+  let cl =
+    Cfg_with_layout.create cfg ~layout ~new_labels:Label.Set.empty
+      ~preserve_orig_labels:true
+  in
+  let fun_body = run cl in
+  let fundecl =
+    { Linear.fun_name;
+      fun_body;
+      fun_fast = false;
+      fun_dbg = Debuginfo.none;
+      fun_spacetime_shape = None;
+      fun_num_stack_slots = Array.make Proc.num_register_classes 0;
+      fun_frame_required = false;
+      fun_prologue_required = false;
+      fun_contains_calls = false;
+      fun_tailrec_entry_point_label
+    }
+  in
+  X86_proc.reset_asm_code ();
+  Emit.fundecl fundecl;
+  X86_proc.generate_code
+    (Some (X86_gas.generate_asm !Emitaux.output_channel))

@@ -17,3 +17,5 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 val run : Cfg_with_layout.t -> Linear.instruction
+
+val print_assembly : Cfg.basic_block list -> unit

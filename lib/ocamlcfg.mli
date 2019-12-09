@@ -78,10 +78,14 @@ module Cfg_with_layout : sig
   (* CR mshinwell: Interface to determine if a block is a trap handler? *)
 end
 
-val verbose : bool ref
-
 module Passes : sig
   val add_extra_debug : Cfg.t -> file:string -> unit
 
   val simplify_terminators : Cfg.t -> unit
+end
+
+module Util : sig
+  val verbose : bool ref
+
+  val print_assembly : Cfg.Basic_block.t list -> unit
 end

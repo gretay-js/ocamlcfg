@@ -49,4 +49,8 @@ module Passes = struct
   let add_extra_debug = Extra_debug.add
 end
 
-let verbose = Cfg.verbose
+module Util = struct
+  let verbose = Cfg.verbose
+
+  let print_assembly = Cfg_to_linear.print_assembly
+end
