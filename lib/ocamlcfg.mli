@@ -59,7 +59,14 @@ module Cfg_with_layout : sig
 
   val set_layout : t -> Label.t list -> unit
 
-  val print_dot : t -> ?show_instr:bool -> ?show_exn:bool -> string -> unit
+  val print_dot :
+    t ->
+    ?show_instr:bool ->
+    ?show_exn:bool ->
+    ?annotate_block:(Label.t -> string) ->
+    ?annotate_succ:(Label.t -> Label.t -> string) ->
+    string ->
+    unit
 
   val print : t -> out_channel -> string -> unit
 

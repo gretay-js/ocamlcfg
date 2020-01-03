@@ -64,7 +64,8 @@ let print t oc msg =
   in
   List.iter print_block t.layout
 
-let print_dot t ?(show_instr = true) ?(show_exn = true) msg =
+let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
+    ?annotate_succ msg =
   let filename =
     Printf.sprintf "%s%s%s.dot"
       (X86_proc.string_of_symbol "" t.cfg.fun_name)
@@ -75,12 +76,23 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) msg =
     Printf.printf "Writing cfg for %s to %s\n" msg filename;
   let oc = open_out filename in
   Printf.fprintf oc "strict digraph \"%s\" {\n" t.cfg.fun_name;
+  let annotate_block label =
+    match annotate_block with
+    | None -> ""
+    | Some f -> Printf.sprintf "\n%s" (f label)
+  in
+  let annotate_succ l1 l2 =
+    match annotate_succ with
+    | None -> ""
+    | Some f -> Printf.sprintf " label=\"%s\"" (f l1 l2)
+  in
   let print_block_dot label (block : Cfg.basic_block) index =
     let name l = Printf.sprintf "\".L%d\"" l in
     let show_index = Option.value index ~default:(-1) in
-    Printf.fprintf oc "\n%s [shape=box label=\".L%d:I%d:S%d%s" (name label)
+    Printf.fprintf oc "\n%s [shape=box label=\".L%d:I%d:S%d%s%s" (name label)
       label show_index (List.length block.body)
-      (if block.is_trap_handler then ":eh" else "");
+      (if block.is_trap_handler then ":eh" else "")
+      (annotate_block label);
     if show_instr then (
       (* CR-someday gyorhs: Printing instruction using Printlinear doesn't
          work because of special characters like { } that need to be escaped.
@@ -97,12 +109,15 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) msg =
       Printf.fprintf oc "\\l" );
     Printf.fprintf oc "\"]\n";
     List.iter
-      (fun l -> Printf.fprintf oc "%s->%s\n" (name label) (name l))
+      (fun l ->
+        Printf.fprintf oc "%s->%s[%s]\n" (name label) (name l)
+          (annotate_succ label l))
       (Cfg.successor_labels ~normal:true ~exn:false t.cfg block);
     if show_exn then (
       List.iter
         (fun l ->
-          Printf.fprintf oc "%s->%s [style=dashed]\n" (name label) (name l))
+          Printf.fprintf oc "%s->%s [style=dashed %s]\n" (name label)
+            (name l) (annotate_succ label l))
         (Cfg.successor_labels ~normal:false ~exn:true t.cfg block);
       if block.can_raise_interproc then
         Printf.fprintf oc "%s->%s [style=dashed]\n" (name label)

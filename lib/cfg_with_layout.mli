@@ -43,6 +43,13 @@ val remove_from_new_labels : t -> Label.t -> unit
 
 val is_trap_handler : t -> Label.t -> bool
 
-val print_dot : t -> ?show_instr:bool -> ?show_exn:bool -> string -> unit
+val print_dot :
+  t ->
+  ?show_instr:bool ->
+  ?show_exn:bool ->
+  ?annotate_block:(Label.t -> string) ->
+  ?annotate_succ:(Label.t -> Label.t -> string) ->
+  string ->
+  unit
 
 val print : t -> out_channel -> string -> unit
