@@ -20,6 +20,10 @@ module C = Cfg
    the compiler. Is there existing code in the compiler that does something
    similar? *)
 
+type result =
+  | Ok of Cfg.condition
+  | Cannot_simplify
+
 module Rep : sig
   type t
 
@@ -117,13 +121,10 @@ end = struct
     | { eq = T; lt = T; gt = F; uo = T } -> Cfloat CFngt
     | { eq = F; lt = F; gt = T; uo = T } -> Cfloat CFnle
     | { eq = F; lt = T; gt = F; uo = T } -> Cfloat CFnge
-    (* CR mshinwell: add comment about [Always] (see e.g. x86-64 emitter) *)
+    (* For floats, it is not enough to check "=,<," because possible outcomes
+       of comparison include "unordered" (see e.g. x86-64 emitter) *)
     | { eq = T; lt = T; gt = T; uo = T } -> Always
-    | { eq = F; lt = F; gt = F; uo = T } -> Unordered
-    (* CR mshinwell: What about ones that can't be expressed as a single
-       comparison, e.g. CFle || CFge? Maybe return something like: Ok of ...
-       | Cannot_simplify ? *)
-    | _ -> assert false
+    | _ -> Unordered
 end
 
 (* Compute one comparison operator that is equivalent to the disjunction of
@@ -132,27 +133,24 @@ end
 let simplify_disjunction_int c1 c2 f =
   let res = Rep.(to_cint (disjunction (of_cint c1) (of_cint c2))) in
   match res with
-  | Cint c -> [f c]
-  | Always -> [C.Always]
+  | Cint c -> Ok (f c)
+  | Always -> Ok C.Always
 
 let simplify_disjunction_float c1 c2 =
   let res = Rep.(to_cfloat (disjunction (of_cfloat c1) (of_cfloat c2))) in
   match res with
-  | Cfloat c -> [C.Test (Ifloattest c)]
-  | Always -> [C.Always]
-  | Unordered ->
-      (* CR mshinwell: or "Cannot_simplify" *)
-      (* There is no specific representation for [Unordered]. *)
-      [C.Test (Ifloattest c1); C.Test (Ifloattest c2)]
+  | Cfloat c -> Ok (C.Test (Ifloattest c))
+  | Always -> Ok C.Always
+  | Unordered -> Cannot_simplify
 
 let disjunction (cmp1 : C.condition) (cmp2 : C.condition) =
   match (cmp1, cmp2) with
   | Always, _ | _, Always ->
       (* This can happen only as a result of a previous simplification. *)
-      [C.Always]
+      Ok C.Always
   | Test c1, Test c2 -> (
-      if c1 = c2 then [C.Test c1]
-      else if c1 = Linear.invert_test c2 then [C.Always]
+      if c1 = c2 then Ok (C.Test c1)
+      else if c1 = Linear.invert_test c2 then Ok C.Always
       else
         match (c1, c2) with
         | Iinttest (Isigned cmp1), Iinttest (Isigned cmp2) ->
@@ -171,6 +169,5 @@ let disjunction (cmp1 : C.condition) (cmp2 : C.condition) =
                 C.Test (Iinttest_imm (Iunsigned cmp, n1)))
         | Ifloattest cmp1, Ifloattest cmp2 ->
             simplify_disjunction_float cmp1 cmp2
-        (* CR mshinwell: It isn't obvious from this function what hits this
-           case; use [Misc.fatal_errorf]. *)
-        | _ -> assert false )
+        | _ -> Misc.fatal_error "Unexpected disjunction cannot be simplified"
+      )

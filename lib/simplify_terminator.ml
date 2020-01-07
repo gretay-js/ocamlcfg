@@ -29,12 +29,19 @@ let block (block : C.basic_block) =
             let cond =
               match Int.Map.find_opt label labels_to_conds with
               | None -> [cond] (* Not seen this target yet *)
-              | Some (joined_cond :: rest) ->
-                  (* CR mshinwell: I think this needs a comment -- let's
-                     discuss *)
-                  Simplify_comparisons.disjunction cond joined_cond @ rest
+              | Some (joined_cond :: rest) -> (
+                  (* Some disjunctions of floating point comparisons cannot
+                     be representated as a single condition. *)
+                  match
+                    Simplify_comparisons.disjunction cond joined_cond
+                  with
+                  | Ok cond -> cond :: rest
+                  | Cannot_simplify -> cond :: joined_cond :: rest )
               | Some [] ->
-                  (* CR mshinwell: Why is this case impossible? *)
+                  (* CR mshinwell: Why is this case impossible?
+
+                     gyorsh: we never add an empty list here to
+                     labels_to_conds.*)
                   assert false
             in
             Int.Map.add label cond labels_to_conds)

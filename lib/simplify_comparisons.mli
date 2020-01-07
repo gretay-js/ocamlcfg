@@ -16,4 +16,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-val disjunction : Cfg.condition -> Cfg.condition -> Cfg.condition list
+type result =
+  | Ok of Cfg.condition
+  | Cannot_simplify
+
+val disjunction : Cfg.condition -> Cfg.condition -> result
