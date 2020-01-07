@@ -261,9 +261,10 @@ let add_terminator t (block : C.basic_block) (i : L.instruction)
     (desc : C.terminator) ~trap_depth ~traps =
   ( match desc with
   (* CR mshinwell: What exactly determines which ones of these must be
-     followed by a label? *)
-  | Branch _ -> ()
-  | Switch _ | Return | Raise _ | Tailcall _ ->
+     followed by a label?
+
+     gyorsh: they should all have have a label now. *)
+  | Branch _ | Switch _ | Return | Raise _ | Tailcall _ ->
       if not (Linear_utils.has_label i.next) then
         Misc.fatal_errorf "Linear instruction not followed by label:@ %a"
           Printlinear.instr

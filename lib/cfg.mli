@@ -30,41 +30,41 @@ type basic_block =
   { (* CR mshinwell: Put the trap stack information here as discussed.
        Enforce the invariant that a block with an exception successor edge
        (which must always be to the label on the head of the trap stack) must
-       have the same trap stack throughout its execution. *)
+       have the same trap stack throughout its execution.
+
+       gyorsh: we do not split blocks in this way in this version yet, see
+       comment at the end of this file. *)
     start : Label.t;
     mutable body : basic instruction list;
     mutable terminator : terminator instruction;
-    (* all predecessors: normal and exceptional path *)
     mutable predecessors : Label.Set.t;
-    (* trap depth of the start of the block.
-
-       CR-soon gyorsh: this can be derived from trap_stack below, except when
-       the block is dead and the trap stack is not know, represented by None.
-       Trap depth is used for cross checking the trap_stack and for emitting
-       adjust trap on exit. *)
-    trap_depth : int;
-    (* All possible targets of raise in this block: subset of trap_handlers,
-       based on instructions that can raise. Subset of trap_handlers. It does
-       not account for interproc flow of exn.
-
-       CR-soon gyorsh: After we split blocks, this will not be needed, it can
-       be inferred from top of trap stack and can_raise of the block. *)
+        (** all predecessors: normal and exceptional path *)
+    trap_depth : int;  (** trap depth of the start of the block. *)
+    (* CR-soon gyorsh: trap_depth can be derived from trap_stack below,
+       except when the block is dead and the trap stack is not known,
+       represented by None. Trap depth is used for cross checking the
+       trap_stack and for emitting adjust trap on exit. *)
     mutable exns : Label.Set.t;
-    (* Does this block contain any instruction that can raise, such as a
-       call, bounds check, allocation, or a raise?
-
-       CR-soon gyorsh: The current implementation with multiple pushtraps in
+        (** All possible targets of raise in this block: subset of
+            trap_handlers, based on instructions that can raise. Subset of
+            trap_handlers. It does not account for interproc flow of exn. *)
+    (* CR-soon gyorsh: After we split blocks, [exns] will not be needed, it
+       can be inferred from top of trap stack and can_raise of the block. *)
+    mutable can_raise : bool;
+        (** Does this block contain any instruction that can raise, such as a
+            call, bounds check, allocation, or a raise? *)
+    (* CR-soon gyorsh: The current implementation with multiple pushtraps in
        each block means that raise can go to different trap_handlers
        associated with the block, depending on which one is on the top of the
        stack, so this an overapproximation. After we split the blocks, this +
        top of trap stack uniquely identifies the exn-successor of this block. *)
-    mutable can_raise : bool;
-    (* This block raises an exn that is not hanlderd in this function.
-       can_raise_interproc implies can_raise but not necessarily vice versa. *)
     mutable can_raise_interproc : bool;
-    (* is this block trap handler or not? i.e., is it an exn successor of
-       another block? *)
+        (** This block raises an exn that is not hanlderd in this function.
+            can_raise_interproc implies can_raise but not necessarily vice
+            versa. *)
     mutable is_trap_handler : bool
+        (** is this block trap handler or not? i.e., is it an exn successor
+            of another block? *)
   }
 
 (** Control Flow Graph of a function. *)
@@ -118,9 +118,24 @@ val iter_blocks : t -> f:(Label.t -> basic_block -> unit) -> unit
     function. *)
 val can_raise : t -> bool
 
-(* printing *)
+(** printing *)
 
 val print_terminator :
   out_channel -> ?sep:string -> terminator instruction -> unit
 
 val print_basic : out_channel -> basic instruction -> unit
+
+(* CR-soon gyorsh: Current version of cfg is a half-way house in terms of its
+   exception hanlding. It has a lot of redundancy and the result of the
+   computation is not used.
+
+   Redundancy: linear_to_cfg reconstructs intraprocedural exception handling
+   stacks from linear IR and annotates each block with this information.
+   However, CFG instructions still include the original push/poptraps from
+   Linear.
+
+   To remove these push/poptraps from CFG IR, we need to split blocks at
+   every push/poptrap. Then, we can annotate the blocks with the top of the
+   trap stack, instead of carrying the copy of the stack. *)
+
+(* CR-soon gyorsh: store label after separately and update after reordering. *)
