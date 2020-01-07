@@ -81,8 +81,6 @@ module Cfg_with_layout : sig
   val of_linear : Linear.fundecl -> preserve_orig_labels:bool -> t
 
   val to_linear : t -> Linear.instruction
-
-  (* CR mshinwell: Interface to determine if a block is a trap handler? *)
 end
 
 module Passes : sig

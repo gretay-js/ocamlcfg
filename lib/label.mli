@@ -20,6 +20,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-(* CR mshinwell: This should be made abstract. *)
-type t = Linear.label
+type t = int
+
 include Identifiable.S with type t := t
