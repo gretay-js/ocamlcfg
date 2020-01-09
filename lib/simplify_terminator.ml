@@ -38,7 +38,7 @@ let block (block : C.basic_block) =
                   | Ok cond -> cond :: rest
                   | Cannot_simplify -> cond :: joined_cond :: rest )
               | Some [] ->
-                  (* CR mshinwell: Why is this case impossible?
+                  (* XCR mshinwell: Why is this case impossible?
 
                      gyorsh: we never add an empty list here to
                      labels_to_conds.*)

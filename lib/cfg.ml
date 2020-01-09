@@ -82,7 +82,7 @@ let replace_successor_labels t ~normal ~exn block ~f =
 let successor_labels_normal t block = snd (List.split (successors t block))
 
 let successor_labels t ~normal ~exn block =
-  (* CR gyorsh: all normal successors labels should be distinct by
+  (* All normal successors labels should be distinct by
      construction but the conditions that differentiate them might not be
      representable or during a transformation we may temporarily violate this
      invariant, so we do not rely on it here. *)
@@ -204,7 +204,7 @@ let print_call oc = function
       | Direct { func_symbol : string; _ } ->
           Printf.fprintf oc "direct %s" func_symbol )
 
-(* CR-someday: implement desc printing, and args/res/dbg, etc, properly, with
+(* CR-someday gyorsh: implement desc printing, and args/res/dbg, etc, properly, with
    regs, use the dreaded Format. *)
 let print_basic oc i =
   Printf.fprintf oc "%d: " i.id;

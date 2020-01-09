@@ -27,7 +27,7 @@ include module type of struct
 end
 
 type basic_block =
-  { (* CR mshinwell: Put the trap stack information here as discussed.
+  { (* XCR mshinwell: Put the trap stack information here as discussed.
        Enforce the invariant that a block with an exception successor edge
        (which must always be to the label on the head of the trap stack) must
        have the same trap stack throughout its execution.

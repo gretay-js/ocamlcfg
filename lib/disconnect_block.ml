@@ -69,7 +69,7 @@ let disconnect cfg_with_layout label =
      trap stacks will be used instead of push/pop trap, and if trap handlers
      can be eliminated then trap stacks would need to be updated. *)
 
-  (* CR mshinwell: The next two lines should move to e.g.
+  (* XCR mshinwell: The next two lines should move to e.g.
      [Cfg.invalidate_block] together with an associated test for that,
      perhaps. When is such a test used? If it is not used, can we skip this
      procedure?

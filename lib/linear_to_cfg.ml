@@ -142,7 +142,7 @@ let register_block t (block : C.basic_block) traps =
   (* Body is constructed in reverse, fix it now: *)
   block.body <- List.rev block.body;
   (* Update trap stacks of successor blocks. *)
-  (* CR gyorsh: do we need to update traps of exns successors? what do we put
+  (* CR-soon gyorsh: do we need to update traps of exns successors? what do we put
      there? we probably need to pop traps before propagating to the handler,
      but can it be unified at the handler? is it not the whole point that a
      handler can be reached with different trap stacks dynamically? Should it
@@ -260,7 +260,7 @@ let block_is_registered t (block : C.basic_block) =
 let add_terminator t (block : C.basic_block) (i : L.instruction)
     (desc : C.terminator) ~trap_depth ~traps =
   ( match desc with
-  (* CR mshinwell: What exactly determines which ones of these must be
+  (* XCR mshinwell: What exactly determines which ones of these must be
      followed by a label?
 
      gyorsh: they should all have have a label now. *)
