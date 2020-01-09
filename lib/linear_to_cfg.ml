@@ -142,12 +142,12 @@ let register_block t (block : C.basic_block) traps =
   (* Body is constructed in reverse, fix it now: *)
   block.body <- List.rev block.body;
   (* Update trap stacks of successor blocks. *)
-  (* CR-soon gyorsh: do we need to update traps of exns successors? what do we put
-     there? we probably need to pop traps before propagating to the handler,
-     but can it be unified at the handler? is it not the whole point that a
-     handler can be reached with different trap stacks dynamically? Should it
-     be a union stacks rather than unify them? Then, we need set of stacks
-     everywhere and how do we unify two sets? *)
+  (* CR-soon gyorsh: do we need to update traps of exns successors? what do
+     we put there? we probably need to pop traps before propagating to the
+     handler, but can it be unified at the handler? is it not the whole point
+     that a handler can be reached with different trap stacks dynamically?
+     Should it be a union stacks rather than unify them? Then, we need set of
+     stacks everywhere and how do we unify two sets? *)
   List.iter
     (fun label -> record_traps t label traps)
     (C.successor_labels t.cfg ~normal:true ~exn:false block);
@@ -260,11 +260,10 @@ let block_is_registered t (block : C.basic_block) =
 let add_terminator t (block : C.basic_block) (i : L.instruction)
     (desc : C.terminator) ~trap_depth ~traps =
   ( match desc with
-  (* XCR mshinwell: What exactly determines which ones of these must be
-     followed by a label?
-
-     gyorsh: they should all have have a label now. *)
-  | Branch _ | Switch _ | Return | Raise _ | Tailcall _ ->
+  (* all terminators are followed by a label, except branches we created for
+     fallthroughs in Linear. *)
+  | Branch _ -> ()
+  | Switch _ | Return | Raise _ | Tailcall _ ->
       if not (Linear_utils.has_label i.next) then
         Misc.fatal_errorf "Linear instruction not followed by label:@ %a"
           Printlinear.instr
