@@ -24,3 +24,5 @@ type labelled_insn = {
 val labelled_insn_end : labelled_insn
 
 val has_label : Linear.instruction -> bool
+
+val to_basic : Mach.operation -> Cfg.basic
