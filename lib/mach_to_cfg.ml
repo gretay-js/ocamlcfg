@@ -125,62 +125,82 @@ let add_terminator t (block : C.basic_block)
   block.terminator <- create_instruction desc i ~trap_depth;
   register_block t block
 
-let create_blocks t start body i stop =
-  match i.desc with
-  | Iend ->
-    match stop with
-    | None -> assert (List.empty body)
-    | Some ->
-      let ti = create_terminator t Cfg.Branch [(Always,stop)] i in
+let rec create_blocks t i start body n =
+  let get_start_blocks t i n =
+    let start = new_label () in
+    create_blocks t i start [] n;
+    start
+  in
+  let start_blocks t i n =
+    create_blocks t i (new_label ()) [] n
+  in
+    match i.Mach.desc with
+    | Iend ->
+      let ti = create_terminator t Cfg.Branch [(Always,n)] i in
       register_block t start body ti
-  | Ireturn ->
-    let body =
-      if t.contains_calls then
-        (create_basic t Cfg.Lreloadretaddr i) :: body
-      else body in
-    let ti = create_terminator t Cfg.Return i in
-    register_block t start body ti in
-    create_blocks t (new_label ()) [] i.next None
-  | Iraise k ->
-    let ti = create_terminator t (Cfg.Raise k) i in
-    register_block t start body ti in
-    create_blocks t (new_label ()) [] i.next None
-  | Iop (Itailcall_ind { label_after }) ->
-    let desc = Cfg.Tailcall (Func (Indirect { label_after })) in
-    let ti = create_terminator t desc i in
-    register_blcok t start body ti;
-    create_blocks t (new_label ()) [] i.next None
-  | Iop (Itailcall_imm { func = func_symbol; label_after }) ->
-    let desc =
-      if String.equal func_symbol (Cfg.fun_name t.cfg) then
-        Cfg.Tailcall (Self { label_after })
-      else Cfg.Tailcall (Func (Direct { func_symbol; label_after }))
-    in
-    let ti = create_terminator t desc i in
-    register_block t start body ti;
-    create_blocks t (new_label ()) [] i.next None
-  | Iop op ->
-    let bi = create_basic t (Linear_utils.to_basic op) i  in
-    create_blocks t start (bi::body) i.next stop
-  | Iifthenelse (test, ifso, ifnot) ->
-    let lbl_end = new_label () in
-    let lbl_ifso = new_label () in
-    let lbl_ifnot = new_label () in
-    let desc = Cfg.Branch [(test,lbl_ifso);(Linear.invert test, lbl_ifnot)] in
-    let ti = create_terminator t desc in
-    register_block t start body ti;
-    create_blocks t lbl_ifso ifso lbl_end;
-    create_blocks t lbl_ifnot ifnot lbl_end;
-    create_blocks t lbl_end [] i.next stop
-  | Iswitch(index, cases) ->
-    let lbl_end = new_label () in
-
-    let desc = Cfg.Branch [(test,lbl_ifso);(Linear.invert test, lbl_ifnot)] in
-    let ti = create_terminator t desc in
-    register_block t start body ti;
-
-    create_blocks t lbl_end [] i.next stop
-
+    | Iop (Itailcall_ind { label_after }) ->
+      let desc = Cfg.Tailcall (Func (Indirect { label_after })) in
+      let ti = create_terminator t desc i in
+      register_block t start body ti;
+      start_blocks t i.next n
+    | Iop (Itailcall_imm { func = func_symbol; label_after }) ->
+      let desc =
+        if String.equal func_symbol (Cfg.fun_name t.cfg) then
+          Cfg.Tailcall (Self { label_after })
+        else Cfg.Tailcall (Func (Direct { func_symbol; label_after }))
+      in
+      let ti = create_terminator t desc i in
+      register_block t start body ti;
+      start_blocks t i.next n
+    | Ireturn ->
+      let body =
+        if t.contains_calls then
+          (create_basic t Cfg.Lreloadretaddr i) :: body
+        else body in
+      let ti = create_terminator t Cfg.Return i in
+      register_block t start body ti;
+      start_blocks t i.next n
+    | Iraise k ->
+      let ti = create_terminator t (Cfg.Raise k) i in
+      register_block t start body ti;
+      start_blocks t i.next n
+    | Iop op ->
+      let bi = create_basic t (Linear_utils.to_basic op) i  in
+      create_blocks t start (bi::body) i.next n
+    | Iifthenelse (test, ifso, ifnot) ->
+      lbl_end = get_start_blocks t i.next n in
+      lbl_ifso = get_start_blocks t ifso lbl_end;
+      lbl_ifnot = get_start_blocks t ifnot lbl_end;
+      let desc = Cfg.Branch [(test,lbl_ifso);(Linear.invert test, lbl_ifnot)] in
+      let ti = create_terminator t desc in
+      register_block t start body ti;
+    | Iswitch(index, cases) ->
+      let lbl_end = get_start_blocks t i.next n in
+      let lbl_cases = Array.map cases (fun case -> get_start_blocks t case lbl_end) in
+      let ti =
+        (* Switches with 1 and 2 branches have been eliminated earlier.
+         Here, we do something for switches with 3 branches. *)
+        if Array.length index = 3 then begin
+          let get_dest n = lbl_cases.(index.(n)) in
+          let s0 = (C.Test (Iinttest_imm (Iunsigned Clt, 1)), get_dest 0) in
+          let s1 = (C.Test (Iinttest_imm (Iunsigned Ceq, 1)), get_dest 1) in
+          let s2 = (C.Test (Iinttest_imm (Iunsigned Cgt, 1)), get_dest 2) in
+          create_terminator t (Cfg.Branch [s0;s1;s2])
+        end else begin
+          create_terminator t (Cfg.Switch lbl_cases)
+        end in
+      register_block t start body ti
+    | Iexit nfail ->
+      let lbl, t = find_exit_label_try_depth nfail in
+      let pops =
+        List.init (!try_depth - t) (fun _ -> create_instruction Cfg.Poptrap i) in
+      let ti = create_terminator t (Cfg.Branch  [(Always,lbl)]) i in
+      register_block t start pops@body ti;
+      let delta_traps = !try_depth - t in
+      let trap_depth = trap_depth + delta_traps in
+      start_blocks t i.next ~trap_depth n
+    | Icatch (_rec_flag, handlers, body) -> ()
+    | Itrywith(body, handler) -> ()
 
 let run (f : Mach.fundecl) ~preserve_orig_labels =
   let t =
