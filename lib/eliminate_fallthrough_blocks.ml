@@ -20,12 +20,14 @@ let is_fallthrough_block cfg_with_layout (block : C.basic_block) =
   let cfg = CL.cfg cfg_with_layout in
   if
     cfg.entry_label = block.start
-    || block.is_trap_handler || block.can_raise
+    || block.is_trap_handler
     || List.length block.body > 0
   then None
   else
     match C.successor_labels ~normal:true ~exn:false cfg block with
-    | [target_label] -> Some target_label
+    | [target_label] ->
+      assert (not block.can_raise);
+      Some target_label
     | _ -> None
 
 (* CR-soon mshinwell: The logic below looks similar in structure to
@@ -61,9 +63,9 @@ let run cfg_with_layout =
   (* Find and disconnect fallthrough blocks (i.e., blocks with empty body and
      a single successor) by rerouting their predecessors to point directly to
      their successors. It can create a new fallthrough block, for example: if
-     we have edges { A -> B, B -> C , A -> C } and B is the only fallthrough
-     here and we eliminate it, then A becomes fallthrough. Repeat until
-     fixpoint.
+     we have edges { A -> B, B -> C , A -> C }, with A empty, and B being the
+     only fallthrough block.  If we eliminate B, then A becomes fallthrough.
+     As such we iterate until fixpoint.
 
      Disconnected fallthrough nodes can be eliminate by dead block
      elimination pass.

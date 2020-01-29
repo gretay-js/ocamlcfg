@@ -1,4 +1,11 @@
+(* CR mshinwell: Add file header *)
+
+(* CR mshinwell: Make these into expect tests? *)
+
 open Trap_stack
+
+(* CR mshinwell for mshinwell: Read after the trap stack cycle detection has
+   been implemented. *)
 
 let () =
   try

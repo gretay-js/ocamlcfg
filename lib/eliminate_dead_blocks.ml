@@ -11,7 +11,7 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
-(* Cr-soon gyorsh: Eliminate dead cycles. *)
+(* CR-soon gyorsh: Eliminate dead cycles. *)
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module C = Cfg

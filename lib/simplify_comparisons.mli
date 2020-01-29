@@ -14,6 +14,8 @@
 
 (* Simplify comparison operations. *)
 
+(* CR mshinwell: Make sure that all .ml and .mli files have this warning
+   stanza. *)
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type result =

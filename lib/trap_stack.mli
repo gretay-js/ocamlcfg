@@ -1,3 +1,6 @@
+(* CR mshinwell: Please add file header and an explanation of what this
+   module is doing (ideally with comments for each function below). *)
+
 type t
 
 exception Unresolved
@@ -16,6 +19,7 @@ val push : t -> Label.t -> t
     terminate if [t] contains a cycle. *)
 val to_list_exn : t -> Label.t list
 
+(* CR mshinwell: Document which is the "top" of the stack. *)
 (** Returns the top of the stack [t], or [None] if [t] is empty. Raises
     [Unresolved] if [t] cannot be resolved. *)
 val top_exn : t -> Label.t option

@@ -25,4 +25,4 @@ let rec has_label (i : Linear.instruction) =
   match i.desc with
   | Lend | Llabel _ -> true
   | Ladjust_trap_depth _ -> has_label i.next
-  | _ -> false
+  | _ -> false  (* CR mshinwell: Make this match exhaustive *)

@@ -17,6 +17,15 @@ type t = stack ref
 
 and h = handler ref
 
+(* CR mshinwell for mshinwell: Re-read once cycle check implemented *)
+
+(* CR mshinwell: As per conversation, add fast check for cycles, with
+   the necessary identities on the nodes that require them.  (Perhaps using
+   phys_equal might suffice for the identity, so long as the structure being
+   tested is mutable.) *)
+
+(* CR mshinwell: I suggest renaming Emp -> Empty (likewise for the .mli),
+   it isn't obvious from the outside what "emp" might mean *)
 and stack =
   | Emp
   | Unknown

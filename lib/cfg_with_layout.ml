@@ -94,7 +94,7 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
       (if block.is_trap_handler then ":eh" else "")
       (annotate_block label);
     if show_instr then (
-      (* CR-someday gyorhs: Printing instruction using Printlinear doesn't
+      (* CR-someday gyorsh: Printing instruction using Printlinear doesn't
          work because of special characters like { } that need to be escaped.
          Should use sexp to print or implement a special printer. *)
       Printf.fprintf oc "\npreds:";
