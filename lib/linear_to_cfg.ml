@@ -24,12 +24,15 @@ type t =
     (* Labels added by cfg construction, except entry. Used for testing of
        the mapping back to Linear IR. *)
     mutable new_labels : Label.Set.t;
-    (* all traps pushed in this function. used to check that all trap
+    (* All traps pushed in this function. Used to check that all trap
        handlers start with Entertrap, to make sure that is_trap_handler set
        for these blocks, which is needed to convert them back to linear (and
-       restore Entertrap). *)
+       restore [Lentertrap]). *)
+    (* CR mshinwell: The above comment refers to Entertrap as a CFG
+       construction, but it doesn't seem to exist *)
     mutable trap_handlers : Label.Set.t;
-    (* Maps labels to trap handler stacks at the beginning of the block *)
+    (* Maps labels of blocks to trap handler stacks at the beginning of the
+       block *)
     (* CR-soon gyorsh: The need for this is because we need to record
        trap_stack for a block that hasn't been created yet. If we change
        create_empty_block to get_or_create, then we don't need this hashtbl
@@ -147,22 +150,34 @@ let register_block t (block : C.basic_block) traps =
      but can it be unified at the handler? is it not the whole point that a
      handler can be reached with different trap stacks dynamically? Should it
      be a union stacks rather than unify them? Then, we need set of stacks
-     everywhere and how do we unify two sets? *)
+     everywhere and how do we unify two sets?
+     As discussed:
+     - think about and/or update comment re. first sentence
+     - unique trap depth per handler. *)
   List.iter
     (fun label -> record_traps t label traps)
     (C.successor_labels t.cfg ~normal:true ~exn:false block);
   Label.Tbl.add t.cfg.blocks block.start block
 
 let can_raise_basic (i : C.basic) =
+  (* CR mshinwell: Make match exhaustive
+     In fact, I would try enabling warning 4 everywhere (just remove it
+     from the @@@ocaml.warning stanza at the top of each file), to catch
+     more of these cases.  Warning 4 can be overkill sometimes but for this
+     library it's probably ok. *)
   match i with
   | Call _ -> true
   | _ -> false
 
 let can_raise_terminator (i : C.terminator) =
+  (* CR mshinwell: Make match exhaustive *)
   match i with
   | Raise _ | Tailcall _ -> true
   | _ -> false
 
+(* CR mshinwell: This function should be renamed, since it sounds like an
+   invariant-checking function at the moment, but actually updates
+   [block.exns]. *)
 let check_trap t label (block : C.basic_block) =
   match Label.Tbl.find_opt t.trap_stacks label with
   | None -> ()
@@ -178,12 +193,18 @@ let check_trap t label (block : C.basic_block) =
             "Malformed linear IR: mismatch trap_depth=%d,but trap_stack \
              length=%d"
             block.trap_depth d;
-        (* All exns in this block must be off based on the trap_stack above,
+        (* All exns in this block must be based off the trap_stack above,
            which was successfully resolved. *)
+        (* CR mshinwell: Clarify what "resolved" means *)
         match Label.Tbl.find_opt t.exns label with
         | None -> ()
         | Some exns ->
             let f acc l =
+              (* CR mshinwell: We can check something about
+                 [block.trap_depth] based on the return value from
+                 [T.top_exn], no? *)
+              (* CR mshinwell: Call this variable [trap_stack] or something
+                 rather than [l]. *)
               match T.top_exn l with
               | None ->
                   block.can_raise_interproc <- true;
@@ -214,6 +235,7 @@ let check_traps t =
   Label.Set.iter
     (fun label ->
       let trap_block = C.get_block_exn t.cfg label in
+      (* CR mshinwell: This again references the mythical Entertrap *)
       if not trap_block.is_trap_handler then
         Misc.fatal_errorf "Label %d used in pushtrap but has no Entertrap."
           label)
@@ -260,10 +282,6 @@ let block_is_registered t (block : C.basic_block) =
 let add_terminator t (block : C.basic_block) (i : L.instruction)
     (desc : C.terminator) ~trap_depth ~traps =
   ( match desc with
-  (* CR mshinwell: What exactly determines which ones of these must be
-     followed by a label?
-
-     gyorsh: they should all have have a label now. *)
   | Branch _ | Switch _ | Return | Raise _ | Tailcall _ ->
       if not (Linear_utils.has_label i.next) then
         Misc.fatal_errorf "Linear instruction not followed by label:@ %a"
@@ -316,10 +334,21 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       add_terminator t block i Return ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lraise kind ->
-      (* CR-soon gyorsh: Why does the compiler not generate adjust after
+      (* CR gyorsh: Why does the compiler not generate adjust after
          raise? raise pops the trap handler stack and then the next block may
          have a different try depth. Also, why do we not need to update
-         trap_depths and traps here like for pop? *)
+         trap_depths and traps here like for pop?
+         mshinwell: I don't think there's anything special about a raise for
+         Linearize; it may still add a trap adjustment.  Think about this some
+         more...
+         "raise" does two things:
+         1. Moves the stack pointer back to the place it was in the most
+            recent trap
+         2. Jumps to the handler.
+         Step 1 is actually the "pop trap" operation.
+         So the stack on the handler identified by the label on the top of
+         the trap stack must equal the current trap stack minus the top
+         frame. *)
       add_terminator t block i (Raise kind) ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lbranch lbl ->
@@ -396,7 +425,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
         T.print traps );
       create_blocks t i.next block ~trap_depth ~traps
   | Lentertrap ->
-      (* Must be the first one in the block. *)
+      (* Must be the first instruction in the block. *)
       assert (List.length block.body = 0);
       block.is_trap_handler <- true;
       create_blocks t i.next block ~trap_depth ~traps

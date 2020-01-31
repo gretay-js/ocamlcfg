@@ -11,8 +11,9 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
-(* Merge successors that go to the same label and simplify their conditions.
-   Modifies the terminators in place *)
+
+(** Merge successors that go to the same label and simplify their conditions.
+    Modifies the terminators in place. *)
 val block : Cfg.basic_block -> unit
 
 val run : Cfg.t -> unit
