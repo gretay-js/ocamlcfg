@@ -25,15 +25,10 @@ let add_discriminator dbg file d =
   Debuginfo.concat dbg nd
 
 let add t ~file =
-  (* CR-soon gyorsh: how to make it forall 'a ? *)
-  let update (i : Cfg.basic Cfg.instruction) =
-    { i with dbg = add_discriminator i.dbg file i.id }
-  in
-  let update_t (i : Cfg.terminator Cfg.instruction) =
-    { i with dbg = add_discriminator i.dbg file i.id }
-  in
+  let update (i : _ Cfg.instruction) =
+    { i with dbg = add_discriminator i.dbg file i.id } in
   let update_block _ (block : Cfg.basic_block) =
-    block.terminator <- update_t block.terminator;
+    block.terminator <- update block.terminator;
     block.body <- List.map update block.body
   in
   Cfg.iter_blocks t ~f:update_block

@@ -16,6 +16,10 @@
 
 type t = private
   { cfg : Cfg.t;
+    (* CR xclerc: my understanding is that `layout` is the list of
+     * the label, in the order in which they appearted in the source
+     * linear representation. I would add a comment with this piece
+     * of information. *)
     mutable layout : Label.t list;
     mutable new_labels : Label.Set.t;
     (* Set for validation, unset for optimization. *)
@@ -43,6 +47,8 @@ val remove_from_new_labels : t -> Label.t -> unit
 
 val is_trap_handler : t -> Label.t -> bool
 
+(* CR xclerc: the name is a bit misleading, as this function is actually
+ * creating a file. *)
 val print_dot :
   t ->
   ?show_instr:bool ->

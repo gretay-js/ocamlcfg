@@ -39,8 +39,12 @@ module Cfg : sig
 
   val get_block : t -> Label.t -> Basic_block.t option
 
+  (* CR xclerc for xclerc: does the fact that we need to pass `t` mean that
+     this function can fail? *)
+  (* CR xclerc: document the fact that is returns only non-exn successors? *)
   val successor_labels : t -> Basic_block.t -> Label.t list
 
+  (* CR xclerc: could be `predecessor_labels`, for the sake of consistency. *)
   val predecessors : Basic_block.t -> Label.t list
 
   val fun_name : t -> string

@@ -40,6 +40,7 @@ type basic_block =
     mutable predecessors : Label.Set.t;
         (** all predecessors: normal and exceptional path *)
     trap_depth : int;  (** trap depth of the start of the block. *)
+    (* CR xclerc: there is no "trap_stack" below *)
     (* CR-soon gyorsh: trap_depth can be derived from trap_stack below,
        except when the block is dead and the trap stack is not known,
        represented by None. Trap depth is used for cross checking the
@@ -59,7 +60,7 @@ type basic_block =
        stack, so this an overapproximation. After we split the blocks, this +
        top of trap stack uniquely identifies the exn-successor of this block. *)
     mutable can_raise_interproc : bool;
-        (** This block raises an exn that is not hanlderd in this function.
+        (** This block raises an exn that is not hanlded in this function.
             can_raise_interproc implies can_raise but not necessarily vice
             versa. *)
     mutable is_trap_handler : bool

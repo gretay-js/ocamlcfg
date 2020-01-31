@@ -21,8 +21,13 @@ type labelled_insn =
 
 let labelled_insn_end = { label = -1; insn = Linear.end_instr }
 
+(* CR-someday xclerc: it might make sense to have this utility function
+   upstreamed (e.g. next to `Linear.has_fallthrough`), as there is a feeling
+   it might get out of sync. *)
 let rec has_label (i : Linear.instruction) =
   match i.desc with
-  | Lend | Llabel _ -> true
+  | Lend | Llabel _ ->
+    (* CR xclerc for xclerc: does `Lprologue` have a label? *)
+    true
   | Ladjust_trap_depth _ -> has_label i.next
   | _ -> false

@@ -32,7 +32,10 @@ let preserve_orig_labels t = t.preserve_orig_labels
 
 let new_labels t = t.new_labels
 
-let set_layout t layout = t.layout <- layout
+let set_layout t layout =
+  (* CR xclerc: should we check whether the contents of `layout` is
+   * consistent with the one of `t`? *)
+  t.layout <- layout
 
 let remove_from_new_labels t label =
   t.new_labels <- Label.Set.remove label t.new_labels
@@ -74,7 +77,7 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
   in
   if !Cfg.verbose then
     Printf.printf "Writing cfg for %s to %s\n" msg filename;
-  let oc = open_out filename in
+  let oc = open_out filename in (* CR xclerc: may never be closed *)
   Printf.fprintf oc "strict digraph \"%s\" {\n" t.cfg.fun_name;
   let annotate_block label =
     match annotate_block with
@@ -94,7 +97,7 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
       (if block.is_trap_handler then ":eh" else "")
       (annotate_block label);
     if show_instr then (
-      (* CR-someday gyorhs: Printing instruction using Printlinear doesn't
+      (* CR-someday gyorsh: Printing instruction using Printlinear doesn't
          work because of special characters like { } that need to be escaped.
          Should use sexp to print or implement a special printer. *)
       Printf.fprintf oc "\npreds:";
@@ -129,10 +132,12 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
       let block = Label.Tbl.find t.cfg.blocks label in
       print_block_dot label block (Some index))
     t.layout;
+  (* CR xclerc for xclerc: . *)
   assert (List.length t.layout <= Label.Tbl.length t.cfg.blocks);
   if List.length t.layout < Label.Tbl.length t.cfg.blocks then
     Label.Tbl.iter
       (fun label block ->
+        (* CR xclerc: rather use `Label.equal`? *)
         match List.find_opt (fun lbl -> label = lbl) t.layout with
         | None -> print_block_dot label block None
         | _ -> ())

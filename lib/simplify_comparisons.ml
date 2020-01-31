@@ -103,6 +103,7 @@ end = struct
     | CFgt -> { eq = F; lt = F; gt = T; uo = F }
     | CFle -> { eq = T; lt = T; gt = F; uo = F }
     | CFge -> { eq = T; lt = F; gt = T; uo = F }
+    (* CR xclerc: I am confused: why are the cases below unordered? *)
     | CFneq -> { eq = F; lt = T; gt = T; uo = T }
     | CFnlt -> { eq = T; lt = F; gt = T; uo = T }
     | CFngt -> { eq = T; lt = T; gt = F; uo = T }
@@ -169,5 +170,8 @@ let disjunction (cmp1 : C.condition) (cmp2 : C.condition) =
                 C.Test (Iinttest_imm (Iunsigned cmp, n1)))
         | Ifloattest cmp1, Ifloattest cmp2 ->
             simplify_disjunction_float cmp1 cmp2
-        | _ -> Misc.fatal_error "Unexpected disjunction cannot be simplified"
+        | _ ->
+            (* CR xclerc: why is this fatal? can we be sure we will never
+             * try to simplify e.g. `Iinttest_imm ... 0` and `Iinttest_imm ... 1`? *)
+            Misc.fatal_error "Unexpected disjunction cannot be simplified"
       )

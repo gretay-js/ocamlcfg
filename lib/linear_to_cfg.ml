@@ -156,6 +156,8 @@ let register_block t (block : C.basic_block) traps =
 let can_raise_basic (i : C.basic) =
   match i with
   | Call _ -> true
+  (* CR xclerc for xclerc: double check that Op (... int div)  cannot raise. *)
+  (* CR xclerc for xclerc: double check that Op (Specific ...) cannot raise *)
   | _ -> false
 
 let can_raise_terminator (i : C.terminator) =
@@ -225,7 +227,7 @@ let check_traps t =
      then it has a registered exn successor or interproc exn. *)
   let f _ (block : C.basic_block) =
     let n = Label.Set.cardinal block.exns in
-    assert (n >= 0);
+    assert (n >= 0); (* CR xclerc: what is it supposed to check? *)
     assert ((not block.can_raise_interproc) || block.can_raise);
     assert ((not block.can_raise) || n > 0 || block.can_raise_interproc)
   in
