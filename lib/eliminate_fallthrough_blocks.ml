@@ -19,7 +19,8 @@ module CL = Cfg_with_layout
 let is_fallthrough_block cfg_with_layout (block : C.basic_block) =
   let cfg = CL.cfg cfg_with_layout in
   if
-    cfg.entry_label = block.start
+    (* CR xclerc: should `block.can_raise_interproc` be added to the disjunction? *)
+    cfg.entry_label = block.start (* CR xclerc: rather use `Label.equal`? *)
     || block.is_trap_handler
     || List.length block.body > 0
   then None
@@ -72,6 +73,9 @@ let run cfg_with_layout =
 
      Termination is guaranteed because every step eliminates a node. The
      order matters for performance but not for the final result. *)
+  (* CR-someday xclerc: I am not positive it should be changed, but we
+   * should not need a fix point here: `is_fallthrough_block` could
+   * return the next non-fallthrough block rather than the next block. *)
   let len = Label.Tbl.length cfg.blocks in
   if !C.verbose then CL.print_dot cfg_with_layout "before_elim_ft";
   disconnect_fallthrough_blocks cfg_with_layout;

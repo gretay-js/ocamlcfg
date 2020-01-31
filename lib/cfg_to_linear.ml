@@ -107,6 +107,11 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
               Misc.fatal_error
                 "Malformed branch: conditions are not inverses of each \
                  other." );
+            (* CR-someday xclerc: consider switching the ifs below to
+             * match eq label_p next.label, eq label_q next.label with
+             * | true, true -> []
+             * | false, false -> ...
+             * *)
             if label_p = next.label && label_q = next.label then []
             else if label_p <> next.label && label_q <> next.label then
               (* CR-soon gyorsh: if both label are not fall through, then
@@ -124,7 +129,7 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
         | [ (Test (Iinttest_imm (Iunsigned Clt, 1)), label0);
             (Test (Iinttest_imm (Iunsigned Ceq, 1)), label1);
             (Test (Iinttest_imm (Iunsigned Cgt, 1)), label2) ] ->
-            let find l = if next.label = l then None else Some l in
+          let find l = if next.label = l (* CR xclerc: use `Label.equal`? *) then None else Some l in
             [L.Lcondbranch3 (find label0, find label1, find label2)]
         | _ ->
             let reason =
@@ -162,7 +167,8 @@ let need_starting_label (cfg_with_layout : CL.t) (block : Cfg.basic_block)
             let new_labels = CL.new_labels cfg_with_layout in
             CL.preserve_orig_labels cfg_with_layout
             && not (Label.Set.mem block.start new_labels)
-        | _ -> assert false )
+        | _ -> (* CR xclerc: rather enumerate the constructors? *)
+          assert false )
 
 let adjust_trap_depth body (block : Cfg.basic_block)
     ~(prev_block : Cfg.basic_block) =

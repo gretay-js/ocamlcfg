@@ -23,6 +23,10 @@ let block (block : C.basic_block) =
          grouped. *)
       (* CR-soon gyorsh: pairwise join of conditions is not canonical,
          because some joins are not representable as a condition. *)
+      (* CR xclerc: this code is generic, but it feels like is has been exercized
+       * only/mainly with branches with two successors. The semantics of
+       * the list of conditions is not very clear to me if e.g. we simplify,
+       * fail to simplify, and then simplify again. *)
       let labels_to_conds =
         List.fold_left
           (fun labels_to_conds (cond, label) ->
@@ -70,6 +74,10 @@ let block (block : C.basic_block) =
       in
       let k = find_pos (len - 1) in
       assert (k >= 0 && k < len);
+      (* CR xclerc: not sure it matters, but it feels weird to have an
+       * optimization that is asymmetrical. From what I understand:
+       * - `Switch [a, b, c, c, ..., c]` would be optimized;
+       * - `Switch [a, a, ..., a, b, c]` would not be optimized. *)
       match k with
       | 0 ->
           (* All labels are the same and equal to l *)

@@ -33,6 +33,7 @@ type basic_block =
     mutable predecessors : Label.Set.t;
         (** All predecessors (both normal and exceptional paths). *)
     trap_depth : int;  (** Trap depth of the start of the block. *)
+    (* CR xclerc: there is no "trap_stack" below *)
     (* CR-soon gyorsh: trap_depth can be derived from trap_stack below,
        except when the block is dead and the trap stack is not known,
        represented by None. Trap depth is used for cross checking the

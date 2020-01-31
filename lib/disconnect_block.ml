@@ -19,7 +19,7 @@ module CL = Cfg_with_layout
 
 let update_predecessor's_terminators (cfg : C.t) ~pred_label
     ~being_disconnected ~target_label =
-  let replace_label l = if l = being_disconnected then target_label else l in
+  let replace_label l = if l = being_disconnected then target_label else l in (* CR xclerc: `Label.equal`? *)
   let pred_block = Label.Tbl.find cfg.blocks pred_label in
   Cfg.replace_successor_labels cfg ~normal:true ~exn:true pred_block
     ~f:replace_label;
@@ -35,6 +35,8 @@ let disconnect cfg_with_layout label =
   in
   if !C.verbose then Printf.printf "Disconnect %d in %s\n" label cfg.fun_name;
   if has_more_than_one_successor && has_predecessors then
+    (* CR-someday xclerc: it feels like this condition is really tied to the current
+     * features of the tool. *)
     Misc.fatal_errorf
       "Cannot disconnect block %a: it has more than one successor and at \
        least one predecessor"
@@ -57,10 +59,10 @@ let disconnect cfg_with_layout label =
           update_predecessor's_terminators cfg ~pred_label
             ~being_disconnected:label ~target_label)
         block.predecessors
-  | [] | _ :: _ -> assert (Label.Set.is_empty block.predecessors) );
+  | [] | _ :: _ :: _ -> assert (Label.Set.is_empty block.predecessors) );
   (* Remove from layout and other data-structures that track labels. *)
   let layout = CL.layout cfg_with_layout in
-  let new_layout = List.filter (fun l -> l <> label) layout in
+  let new_layout = List.filter (fun l -> l <> label) layout in (* CR xclerc: `Label.equal`? *)
   CL.set_layout cfg_with_layout new_layout;
   CL.remove_from_new_labels cfg_with_layout label;
   (* CR-soon gyorsh: how to remove this label from block.trap_stacks of other

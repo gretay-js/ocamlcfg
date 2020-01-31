@@ -40,6 +40,7 @@ and handler =
   | Link of h
   | Label of Label.t
 
+(* CR xclerc: this comment looks outdated *)
 (* rep shortens chains of pop::push *)
 let rec rep (t : t) =
   match !t with
@@ -51,6 +52,8 @@ let rec rep_h (h : h) =
   | Link h -> rep_h h
   | _ -> h
 
+(* CR xclerc: this seems quite dangerous; I would change the type of
+   `emp` to `unit -> stack`. *)
 let emp = ref Emp
 
 let unknown () = ref (Unknown : stack)
@@ -61,6 +64,8 @@ let push_unknown t = ref (Push { h = ref (Unknown : handler); t = rep t })
 
 exception Unresolved
 
+(* CR-someday xclerc: if performance is not a concern, we may want to
+ * express `top_exn` in terms of `to_list` (to avoid code duplication). *)
 let top_exn t =
   match !(rep t) with
   | Emp -> None
@@ -127,10 +132,13 @@ let rec unify_h (h1 : h) (h2 : h) =
   | Unknown, _ -> h1 := Link h2
   | _, Unknown -> h2 := Link h1
   | Label l1, Label l2 ->
+      (* CR xclerc: I would rather use Label.equal (defensive). *)
       if l1 <> l2 then (
         print_pair_h "handler labels disagree:" h1 h2;
         fail () )
 
+(* CR-someday xclerc: that might be easy to debug, but at the same time
+ * it might cause problems e.g. in a CI context. *)
 (* If there is a cycle, this won't terminate but that's easy to debug. If
    there is no cycle, it terminates because every step decreases the
    following well-founded order: (1) removes one unknown, (2) transforms one

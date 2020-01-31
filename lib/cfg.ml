@@ -69,10 +69,15 @@ let replace_successor_labels_normal t block ~f =
   | Branch successors ->
       let replace_successor (cond, l) = (cond, f l) in
       let new_successors = List.map replace_successor successors in
+      (* CR xclerc: should we check whether the new labels are in `t`?
+       * There is also the question of the associated conditions;
+       * e.g. if `[Test t1, ...; Test t2, ...]` then `t1` must be the
+       * inverse of `t2`. *)
       block.terminator <-
         { block.terminator with desc = Branch new_successors }
   | Switch labels ->
       let new_labels = Array.map f labels in
+      (* CR xclerc: should we check whether the new labels are in `t`? *)
       block.terminator <- { block.terminator with desc = Switch new_labels }
   | Tailcall (Self _) ->
       (* CR mshinwell: It seems odd that this function will change the
@@ -82,11 +87,13 @@ let replace_successor_labels_normal t block ~f =
          assert
            (Label.equal being_disconnected cfg.fun_tailrec_entry_point_label);
       *)
+      (* CR xclerc: should we check whether the new label is in `t`? *)
       t.fun_tailrec_entry_point_label <- f t.fun_tailrec_entry_point_label
   | Return | Raise _ | Tailcall (Func _) -> ()
 
 let replace_successor_labels t ~normal ~exn block ~f =
   if normal then replace_successor_labels_normal t block ~f;
+  (* CR xclerc: should we check whether the new labels are in `t`? *)
   if exn then block.exns <- Label.Set.map f block.exns
 
 let successor_labels_normal t block = snd (List.split (successors t block))
@@ -132,6 +139,7 @@ let entry_label t = t.entry_label
 let fun_tailrec_entry_point_label t = t.fun_tailrec_entry_point_label
 
 let set_fun_tailrec_entry_point_label t label =
+  (* CR xclerc: I would check/assert that the passed label is in `t` *)
   t.fun_tailrec_entry_point_label <- label
 
 let iter_blocks t ~f = Label.Tbl.iter f t.blocks

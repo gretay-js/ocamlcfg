@@ -24,8 +24,14 @@ let block_is_dead cfg_with_layout (block : C.basic_block) =
      is_trap_handler check when CFG is updated to use trap stacks instead of
      pushtrap/poptrap instructions in CFG. *)
   && (not block.is_trap_handler)
+  (* CR xclerc: I would rather used `Label.equal` (defensive against a change
+     of `Label.t`). *)
   && cfg.entry_label <> block.start
 
+(* CR-someday xclerc: not to say the implementation should change any time
+   soon, but since it was mentioned the other day: with support for generic
+   data flow analysis, a trivial analysis would identify all live/dead
+   blocks in one go and the function below would no longer be recursive. *)
 let rec eliminate_dead_blocks cfg_with_layout =
   let cfg = CL.cfg cfg_with_layout in
   if CL.preserve_orig_labels cfg_with_layout then

@@ -50,7 +50,7 @@ module S = struct
     | Move
     | Spill
     | Reload
-    | Const_int of nativeint
+    | Const_int of nativeint (* CR-someday xclerc: change to `Targetint.t` *)
     | Const_float of int64
     | Const_symbol of string
     | Stackoffset of int
