@@ -39,6 +39,7 @@ module Cfg : sig
 
   val get_block : t -> Label.t -> Basic_block.t option
 
+  (** [successor_labels] only returns non-exceptional edges. *)
   val successor_labels : t -> Basic_block.t -> Label.t list
 
   val predecessors : Basic_block.t -> Label.t list

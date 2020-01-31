@@ -18,6 +18,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* CR mshinwell: Discuss licence, ensure headers are consistent and
+   check that author attributions are correct. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 let verbose = ref false
@@ -72,6 +75,13 @@ let replace_successor_labels_normal t block ~f =
       let new_labels = Array.map f labels in
       block.terminator <- { block.terminator with desc = Switch new_labels }
   | Tailcall (Self _) ->
+      (* CR mshinwell: It seems odd that this function will change the
+         entry point label in [t] no matter which [block] we have...
+         In fact, when this function lived in disconnect_block.ml, there
+         was the following check:
+         assert
+           (Label.equal being_disconnected cfg.fun_tailrec_entry_point_label);
+      *)
       t.fun_tailrec_entry_point_label <- f t.fun_tailrec_entry_point_label
   | Return | Raise _ | Tailcall (Func _) -> ()
 
@@ -82,10 +92,12 @@ let replace_successor_labels t ~normal ~exn block ~f =
 let successor_labels_normal t block = snd (List.split (successors t block))
 
 let successor_labels t ~normal ~exn block =
-  (* All normal successors labels should be distinct by
+  (* CR gyorsh: all normal successors labels should be distinct by
      construction but the conditions that differentiate them might not be
      representable or during a transformation we may temporarily violate this
      invariant, so we do not rely on it here. *)
+  (* CR mshinwell: We need to resolve or defer all CRs before this can be
+     used in production---what is happening with this one? *)
   match (normal, exn) with
   | false, false -> []
   | true, false -> successor_labels_normal t block
@@ -124,6 +136,7 @@ let set_fun_tailrec_entry_point_label t label =
 
 let iter_blocks t ~f = Label.Tbl.iter f t.blocks
 
+(* CR mshinwell: Rename to [can_raise_interproc]? *)
 let can_raise t =
   let res = ref false in
   iter_blocks t ~f:(fun _ b -> if b.can_raise_interproc then res := true);

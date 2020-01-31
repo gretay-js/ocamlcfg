@@ -124,6 +124,8 @@ end = struct
     (* For floats, it is not enough to check "=,<," because possible outcomes
        of comparison include "unordered" (see e.g. x86-64 emitter) *)
     | { eq = T; lt = T; gt = T; uo = T } -> Always
+    (* CR mshinwell: Maybe rename Unordered -> Unrepresentable?
+       And just double-check these again. *)
     | _ -> Unordered
 end
 

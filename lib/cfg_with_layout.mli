@@ -14,6 +14,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+(* CR mshinwell: I'm unsure why this needs to be [private] when there are
+   accessor functions below. *)
 type t = private
   { cfg : Cfg.t;
     mutable layout : Label.t list;

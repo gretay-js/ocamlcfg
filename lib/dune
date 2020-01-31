@@ -17,4 +17,4 @@
   )
  (libraries
   compiler-libs.common)
- (synopsis "library for building CFG"))
+ (synopsis "Library for building CFG from Linear code"))

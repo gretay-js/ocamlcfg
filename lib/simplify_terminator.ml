@@ -38,10 +38,8 @@ let block (block : C.basic_block) =
                   | Ok cond -> cond :: rest
                   | Cannot_simplify -> cond :: joined_cond :: rest )
               | Some [] ->
-                  (* XCR mshinwell: Why is this case impossible?
-
-                     gyorsh: we never add an empty list here to
-                     labels_to_conds.*)
+                  (* This case is impossible becase we never add an empty list
+                     to [labels_to_conds]. *)
                   assert false
             in
             Int.Map.add label cond labels_to_conds)
@@ -63,7 +61,7 @@ let block (block : C.basic_block) =
          k..len-1. *)
       let len = Array.length labels in
       if len < 1 then
-        Misc.fatal_error "Malform terminator: switch with empty arms";
+        Misc.fatal_error "Malformed terminator: switch with empty arms";
       let l = labels.(len - 1) in
       let rec find_pos k =
         if k = 0 then 0
