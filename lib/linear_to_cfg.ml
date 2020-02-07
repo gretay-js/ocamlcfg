@@ -150,24 +150,22 @@ let register_block t (block : C.basic_block) traps =
      but can it be unified at the handler? is it not the whole point that a
      handler can be reached with different trap stacks dynamically? Should it
      be a union stacks rather than unify them? Then, we need set of stacks
-     everywhere and how do we unify two sets?
-     As discussed:
-     - think about and/or update comment re. first sentence
-     - unique trap depth per handler. *)
+     everywhere and how do we unify two sets? As discussed: - think about
+     and/or update comment re. first sentence - unique trap depth per
+     handler. *)
   List.iter
     (fun label -> record_traps t label traps)
     (C.successor_labels t.cfg ~normal:true ~exn:false block);
   Label.Tbl.add t.cfg.blocks block.start block
 
 let can_raise_basic (i : C.basic) =
-  (* CR mshinwell: Make match exhaustive
-     In fact, I would try enabling warning 4 everywhere (just remove it
-     from the @@@ocaml.warning stanza at the top of each file), to catch
-     more of these cases.  Warning 4 can be overkill sometimes but for this
-     library it's probably ok. *)
+  (* CR mshinwell: Make match exhaustive In fact, I would try enabling
+     warning 4 everywhere (just remove it from the @@@ocaml.warning stanza at
+     the top of each file), to catch more of these cases. Warning 4 can be
+     overkill sometimes but for this library it's probably ok. *)
   match i with
   | Call _ -> true
-  (* CR xclerc for xclerc: double check that Op (... int div)  cannot raise. *)
+  (* CR xclerc for xclerc: double check that Op (... int div) cannot raise. *)
   (* CR xclerc for xclerc: double check that Op (Specific ...) cannot raise *)
   | _ -> false
 
@@ -249,7 +247,7 @@ let check_traps t =
      then it has a registered exn successor or interproc exn. *)
   let f _ (block : C.basic_block) =
     let n = Label.Set.cardinal block.exns in
-    assert (n >= 0); (* CR xclerc: what is it supposed to check? *)
+    (* XCR xclerc: what is it supposed to check? *)
     assert ((not block.can_raise_interproc) || block.can_raise);
     assert ((not block.can_raise) || n > 0 || block.can_raise_interproc)
   in
@@ -284,14 +282,14 @@ let block_is_registered t (block : C.basic_block) =
 let add_terminator t (block : C.basic_block) (i : L.instruction)
     (desc : C.terminator) ~trap_depth ~traps =
   ( match desc with
-    (* all terminators are followed by a label, except branches we created for
-       fallthroughs in Linear. *)
-    (* CR gyorsh for mshinwell: you asked in the previous review round:
-       "What exactly determines which ones of these must be followed by a label?"
-       and I put in the comment above, but then you removed the case for Branch,
-       I think, not sure why, and it is needed. I put it back. *)
-    | Branch _ -> ()
-    | Switch _ | Return | Raise _ | Tailcall _ ->
+  (* all terminators are followed by a label, except branches we created for
+     fallthroughs in Linear. *)
+  (* CR gyorsh for mshinwell: you asked in the previous review round: "What
+     exactly determines which ones of these must be followed by a label?" and
+     I put in the comment above, but then you removed the case for Branch, I
+     think, not sure why, and it is needed. I put it back. *)
+  | Branch _ -> ()
+  | Switch _ | Return | Raise _ | Tailcall _ ->
       if not (Linear_utils.has_label i.next) then
         Misc.fatal_errorf "Linear instruction not followed by label:@ %a"
           Printlinear.instr
@@ -343,21 +341,17 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       add_terminator t block i Return ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lraise kind ->
-      (* CR gyorsh: Why does the compiler not generate adjust after
-         raise? raise pops the trap handler stack and then the next block may
-         have a different try depth. Also, why do we not need to update
-         trap_depths and traps here like for pop?
-         mshinwell: I don't think there's anything special about a raise for
-         Linearize; it may still add a trap adjustment.  Think about this some
-         more...
-         "raise" does two things:
-         1. Moves the stack pointer back to the place it was in the most
-            recent trap
-         2. Jumps to the handler.
-         Step 1 is actually the "pop trap" operation.
-         So the stack on the handler identified by the label on the top of
-         the trap stack must equal the current trap stack minus the top
-         frame. *)
+      (* CR gyorsh: Why does the compiler not generate adjust after raise?
+         raise pops the trap handler stack and then the next block may have a
+         different try depth. Also, why do we not need to update trap_depths
+         and traps here like for pop? mshinwell: I don't think there's
+         anything special about a raise for Linearize; it may still add a
+         trap adjustment. Think about this some more... "raise" does two
+         things: 1. Moves the stack pointer back to the place it was in the
+         most recent trap 2. Jumps to the handler. Step 1 is actually the
+         "pop trap" operation. So the stack on the handler identified by the
+         label on the top of the trap stack must equal the current trap stack
+         minus the top frame. *)
       add_terminator t block i (Raise kind) ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lbranch lbl ->
