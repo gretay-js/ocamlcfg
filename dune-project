@@ -3,7 +3,7 @@
 (name ocamlcfg)
 (version 0.1.0)
 
-; (license MIT)
+(license MIT)
 (maintainers "Greta Yorsh <gyorsh@janestreet.com>")
 (authors "Greta Yorsh <gyorsh@janestreet.com>")
 (source (github gretay-js/ocamlfdo))
