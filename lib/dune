@@ -9,11 +9,12 @@
       eliminate_fallthrough_blocks
       cfg_to_linear
       extra_debug
-      simplify_comparisons
+      simplify_terminator
       cfg_with_layout
       trap_stack
       disconnect_block
       linear_to_cfg
+      label
   )
  (libraries
   compiler-libs.common)
