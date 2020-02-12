@@ -1,18 +1,4 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCamlFDO                               *)
-(*                                                                        *)
-(*                     Greta Yorsh, Jane Street Europe                    *)
-(*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
-
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 type t =
   { cfg : Cfg.t;
@@ -33,11 +19,21 @@ let preserve_orig_labels t = t.preserve_orig_labels
 let new_labels t = t.new_labels
 
 let set_layout t layout =
-  (* CR xclerc: should we check whether the contents of `layout` is
-   * consistent with the one of `t`? *)
+  (* XCR xclerc: should we check whether the contents of `layout` is
+   * consistent with the one of `t`?
+  *)
+  let cur_layout = Label.Set.of_list t.layout in
+  let new_layout = Label.Set.of_list layout in
+  if not (Label.Set.equal cur_layout new_layout &&
+          List.hd layout = t.cfg.entry_label) then
+    Misc.fatal_error "Cfg set_layout: new layout is not a permutation of \
+                      the current layout, or first label is not entry";
   t.layout <- layout
 
-let remove_from_new_labels t label =
+let remove_block t label =
+  Cfg.remove_block_exn t.cfg label;
+  (* XCR xclerc: `Label.equal`? *)
+  t.layout <- List.filter (fun l -> not (Label.equal l label)) t.layout;
   t.new_labels <- Label.Set.remove label t.new_labels
 
 let is_trap_handler t label =
@@ -59,25 +55,16 @@ let print t oc msg =
     Printf.fprintf oc "\npredecessors:";
     Label.Set.iter (Printf.fprintf oc " %d") block.predecessors;
     Printf.fprintf oc "\nsuccessors:";
-    List.iter (Printf.fprintf oc " %d")
+    Label.Set.iter (Printf.fprintf oc " %d")
       (Cfg.successor_labels ~normal:true ~exn:false t.cfg block);
     Printf.fprintf oc "\nexn-successors:";
-    List.iter (Printf.fprintf oc " %d")
+    Label.Set.iter (Printf.fprintf oc " %d")
       (Cfg.successor_labels ~normal:false ~exn:true t.cfg block)
   in
   List.iter print_block t.layout
 
 let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
-    ?annotate_succ msg =
-  let filename =
-    Printf.sprintf "%s%s%s.dot"
-      (X86_proc.string_of_symbol "" t.cfg.fun_name)
-      (if msg = "" then "" else ".")
-      msg
-  in
-  if !Cfg.verbose then
-    Printf.printf "Writing cfg for %s to %s\n" msg filename;
-  let oc = open_out filename in (* CR xclerc: may never be closed *)
+    ?annotate_succ oc =
   Printf.fprintf oc "strict digraph \"%s\" {\n" t.cfg.fun_name;
   let annotate_block label =
     match annotate_block with
@@ -111,13 +98,13 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
       Cfg.print_terminator oc ~sep:"\\l" block.terminator;
       Printf.fprintf oc "\\l" );
     Printf.fprintf oc "\"]\n";
-    List.iter
+    Label.Set.iter
       (fun l ->
         Printf.fprintf oc "%s->%s[%s]\n" (name label) (name l)
           (annotate_succ label l))
       (Cfg.successor_labels ~normal:true ~exn:false t.cfg block);
     if show_exn then (
-      List.iter
+      Label.Set.iter
         (fun l ->
           Printf.fprintf oc "%s->%s [style=dashed %s]\n" (name label)
             (name l) (annotate_succ label l))
@@ -137,10 +124,29 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
   if List.length t.layout < Label.Tbl.length t.cfg.blocks then
     Label.Tbl.iter
       (fun label block ->
-        (* CR xclerc: rather use `Label.equal`? *)
-        match List.find_opt (fun lbl -> label = lbl) t.layout with
+        (* XCR xclerc: rather use `Label.equal`? *)
+        match List.find_opt (fun lbl -> Label.equal label lbl) t.layout with
         | None -> print_block_dot label block None
         | _ -> ())
       t.cfg.blocks;
-  Printf.fprintf oc "}\n";
-  close_out oc
+  Printf.fprintf oc "}\n"
+
+let save_as_dot t ?show_instr ?show_exn ?annotate_block
+    ?annotate_succ msg =
+  let filename =
+    Printf.sprintf "%s%s%s.dot"
+      (X86_proc.string_of_symbol "" t.cfg.fun_name)
+      (if msg = "" then "" else ".")
+      msg
+  in
+  if !Cfg.verbose then
+    Printf.printf "Writing cfg for %s to %s\n" msg filename;
+  let oc = open_out filename in
+  (* XCR xclerc: may never be closed
+
+     gyorsh: not sure why... is that the assert?
+     in any case, now the file handling is wrapped in try finally: *)
+  Misc.try_finally (fun () ->
+    print_dot t ?show_instr ?show_exn ?annotate_block ?annotate_succ oc)
+    ~always:(fun () -> close_out oc)
+    ~exceptionally:(fun _exn -> Misc.remove_file filename)

@@ -1,22 +1,9 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCamlFDO                               *)
-(*                                                                        *)
-(*                     Greta Yorsh, Jane Street Europe                    *)
-(*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
-(* CR-soon gyorsh: Eliminate dead cycles. *)
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 module C = Cfg
 module CL = Cfg_with_layout
 
+(* CR-soon gyorsh: Eliminate dead cycles. *)
 let block_is_dead cfg_with_layout (block : C.basic_block) =
   let cfg = CL.cfg cfg_with_layout in
   Label.Set.is_empty block.predecessors
@@ -24,9 +11,9 @@ let block_is_dead cfg_with_layout (block : C.basic_block) =
      is_trap_handler check when CFG is updated to use trap stacks instead of
      pushtrap/poptrap instructions in CFG. *)
   && (not block.is_trap_handler)
-  (* CR xclerc: I would rather used `Label.equal` (defensive against a change
+  (* XCR xclerc: I would rather used `Label.equal` (defensive against a change
      of `Label.t`). *)
-  && cfg.entry_label <> block.start
+  && not (Label.equal cfg.entry_label block.start)
 
 (* CR-someday xclerc: not to say the implementation should change any time
    soon, but since it was mentioned the other day: with support for generic
@@ -43,12 +30,11 @@ let rec eliminate_dead_blocks cfg_with_layout =
         if block_is_dead cfg_with_layout block then label :: found else found)
       cfg.blocks []
   in
-  let num_found_dead = List.length found_dead in
-  if num_found_dead > 0 then (
+  if (List.compare_length_with found_dead 0) = 0 then (
     List.iter (Disconnect_block.disconnect cfg_with_layout) found_dead;
     if !C.verbose then (
       Printf.printf "Found and eliminated %d dead blocks in function %s.\n"
-        num_found_dead cfg.fun_name;
+        (List.length found_dead) cfg.fun_name;
       Printf.printf "Eliminated blocks are:";
       List.iter (Printf.printf "\n%d") found_dead;
       Printf.printf "\n" );

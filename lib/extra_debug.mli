@@ -1,19 +1,7 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCamlFDO                               *)
-(*                                                                        *)
-(*                     Greta Yorsh, Jane Street Europe                    *)
-(*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
-
 (** Insertion of extra debugging information used to correlate between
     machine instructions, [Linear] and [Cfg] code. *)
+
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 (** Adds the id of each cfg instruction into the debug info of each
     instruction.  The id is encoded as the "line number" in the [file]. *)

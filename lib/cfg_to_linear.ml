@@ -1,18 +1,4 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCamlFDO                               *)
-(*                                                                        *)
-(*                     Greta Yorsh, Jane Street Europe                    *)
-(*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
-
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 module CL = Cfg_with_layout
 module L = Linear
@@ -84,6 +70,74 @@ let basic_to_linear (i : _ Cfg.instruction) ~next =
   let desc = from_basic i.desc in
   to_linear_instr ~like:i desc ~next
 
+let mk_int_test ~lt ~eq ~gt :  Cmm.integer_comparison =
+  match (eq,lt,gt) with
+  | (true,false,false) -> Ceq
+  | (false,true,false) -> Clt
+  | (false,false,true) -> Cgt
+  | (false,true,true) -> Cne
+  | (true,true,false) -> Cle
+  | (true,false,true) -> Cge
+  | (true,true,true) -> assert false
+  | (false, false, false) -> assert false
+
+
+(* Certain "unordered" outcomes of float comparisions
+   are not expressible as a single Cmm.float_comparison operator,
+   or a disjunction of disjoint Cmm.float_comparison operators.
+
+   For these cases, we emit a jump with a comparison operator
+   that is not disjoint from previously emitted comparisons
+   for this block, and therefore must appear after them.
+*)
+type float_test = { must_be_last: bool;
+                    c : Cmm.float_comparison list;
+                  }
+
+let mk_float_test ~lt ~eq ~gt ~uo =
+  let any c =
+    {
+      must_be_last = false;
+      c;
+    }
+  in
+  let must_be_last c =
+    {
+      must_be_last = true;
+      c;
+    }
+  in
+  match (eq, lt, gt, uo) with
+  | (true,  false, false, false) ->  any [CFeq]
+  | (false, true,  false, false ) -> any [CFlt]
+  | (false, false, true,  false ) -> any [CFgt]
+  | (true,  true,  false, false ) -> any [CFle]
+  | (true,  false, true,  false ) -> any [CFge]
+  | (false, true,  true,  true ) -> any [CFneq]
+  | (true,  false, true,  true ) -> any [CFnlt]
+  | (true,  true,  false, true ) -> any [CFngt]
+  | (false, false, true,  true ) -> any [CFnle]
+  | (false, true,  false, true ) -> any [CFnge]
+  | (true,  true,  true,  true ) -> assert false (* unconditional jump *)
+  | (false, false, false, false) -> assert false (* no successors *)
+  | (true, true, true, false) -> any [CFle;CFgt]
+    (* CR-soon gyorsh: how to choose between equivalent representations:
+       [CFle;CFgt]
+       [CFlt;CFge]
+       [CFlt;CFeq;CFgt]
+    *)
+  | (false, true, true, false) -> any [CFlt;CFgt]
+  | (false, false, false, true) -> must_be_last [CFnlt]
+  | (true,  false, false, true) -> must_be_last [CFnlt]
+  (* XCR mshinwell: Maybe rename Unordered -> Unrepresentable?
+     And just double-check these again.
+
+     gyorsh: everything is representable now that we can emit several
+     conditional jumps if needed,
+     and control the order in which they are emitted.
+  *)
+
+
 let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
     ~(next : Linear_utils.labelled_insn) =
   let desc_list =
@@ -98,48 +152,136 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
         [L.Lop (Itailcall_imm { func = Cfg.fun_name cfg; label_after })]
     | Switch labels -> [L.Lswitch labels]
     | Branch successors -> (
+        (* XCR-someday xclerc: consider switching the ifs below to
+         * match eq label_p next.label, eq label_q next.label with
+         * | true, true -> []
+         * | false, false -> ...
+         * *)
+        (* CR-soon gyorsh: refactor, a lot of redundant code
+           for different cases *)
+        (* CR-soon gyorsh: for successor labels that are not fallthrough,
+           order of branch instructions should depend on perf data and
+           possibly the relative position of the target labels
+           and the current block: whether the jumps are forward or back.
+           This information can be obtained from the layout. *)
+        let branch_or_fallthrough lbl =
+          if Label.equal next.label lbl then [] else [L.Lbranch lbl]
+        in
+        let emit_bool (c1,l1) (c2,l2) =
+          match Label.equal l1 next.label, Label.equal l2 next.label with
+          | true, true -> []
+          | false, true -> [L.Lcondbranch (c1, l1)]
+          | true, false -> [L.Lcondbranch (c2, l2)]
+          | false, false ->
+            if Label.equal l1 l2 then
+              [L.Lbranch l1]
+            else
+              [L.Lcondbranch (c1, l1);
+               L.Lcondbranch (c2, l2)]
+        in
         match successors with
-        | [(Always, label)] ->
-            if next.label = label then [] else [L.Lbranch label]
-        | [(Test cond_p, label_p); (Test cond_q, label_q)] ->
-            if cond_p <> L.invert_test cond_q then (
-              Cfg.print_terminator stderr terminator;
-              Misc.fatal_error
-                "Malformed branch: conditions are not inverses of each \
-                 other." );
-            (* CR-someday xclerc: consider switching the ifs below to
-             * match eq label_p next.label, eq label_q next.label with
-             * | true, true -> []
-             * | false, false -> ...
-             * *)
-            if label_p = next.label && label_q = next.label then []
-            else if label_p <> next.label && label_q <> next.label then
-              (* CR-soon gyorsh: if both label are not fall through, then
-                 arrangement should depend on perf data and possibly the
-                 relative position of the target labels and the current
-                 block: whether the jumps are forward or back. This
-                 information can be obtained from layout but it needs to be
-                 made accessible here. *)
-              [L.Lcondbranch (cond_p, label_p); Lbranch label_q]
-            else if label_p = next.label then
-              [L.Lcondbranch (cond_q, label_q)]
-            else if label_q = next.label then
-              [L.Lcondbranch (cond_p, label_p)]
-            else assert false
-        | [ (Test (Iinttest_imm (Iunsigned Clt, 1)), label0);
-            (Test (Iinttest_imm (Iunsigned Ceq, 1)), label1);
-            (Test (Iinttest_imm (Iunsigned Cgt, 1)), label2) ] ->
-          let find l = if next.label = l (* CR xclerc: use `Label.equal`? *) then None else Some l in
-            [L.Lcondbranch3 (find label0, find label1, find label2)]
-        | _ ->
-            let reason =
-              match successors with
-              | [] -> "no successors"
-              | [(Test _, _)] -> "successors are non-exhaustive"
-              | _ -> ""
-            in
-            Cfg.print_terminator stderr terminator;
-            Misc.fatal_errorf "Malformed branch %s" reason )
+        | Always label -> branch_or_fallthrough label
+        | Is_even {ifso;ifnot} ->
+          emit_bool (Ieventest, ifso) (Ioddtest, ifnot)
+        | Is_true {ifso;ifnot} ->
+          emit_bool (Itruetest, ifso) (Ifalsetest, ifnot)
+        | Int_test {lt;eq;gt;imm=Some 1;is_signed=false} ->
+          (* XCR xclerc: use `Label.equal`? *)
+          let find l = if Label.equal next.label l
+            then None else Some l
+          in
+          [L.Lcondbranch3 (find lt, find eq, find gt)]
+        | Float_test {lt;eq;gt;uo;} ->
+          let successor_labels =
+            Label.Set.singleton lt
+            |> Label.Set.add gt
+            |> Label.Set.add eq
+            |> Label.Set.add uo
+          in
+          (match Label.Set.cardinal successor_labels with
+           | 0 -> assert false
+           | 1 -> branch_or_fallthrough (Label.Set.min_elt successor_labels)
+           | 2 | 3 | 4 ->
+             let emit ~is_last lbl =
+               let x = mk_float_test
+                         ~lt:(Label.equal lt lbl)
+                         ~eq:(Label.equal eq lbl)
+                         ~gt:(Label.equal gt lbl)
+                         ~uo:(Label.equal uo lbl)
+               in
+               if x.must_be_last && not is_last then
+                 Misc.fatal_error "Illegal branch on floating point \
+                                   comparison with unordered";
+               List.map (fun cond ->
+                 L.Lcondbranch (Ifloattest cond, lbl))
+                 x.c
+             in
+             (* If one of the successor is a fallthrough label,
+                do not emit a jump for it.
+                Otherwise, the last jump is unconditional.  *)
+             let last =
+               if Label.Set.mem next.label successor_labels then
+                 next.label
+               else
+                 (* Emit jump to [uo] label last,
+                    because in some cases its condition is not disjoint.  *)
+                 uo
+             in
+             let init, target_labels =
+               let init = branch_or_fallthrough last in
+               let target_labels = (Label.Set.remove last successor_labels) in
+               (* If [uo] does need a condition jump, emit it last,
+                  because in some cases its condition is not disjoint. *)
+               if Label.Set.mem uo target_labels then
+                 (emit ~is_last:true uo)@init,
+                 (Label.Set.remove uo successor_labels)
+               else
+                 init, target_labels
+             in
+             Label.Set.fold (fun lbl acc -> (emit ~is_last:false lbl)@acc)
+               target_labels
+               init
+           | _ -> assert false)
+        | Int_test {lt;eq;gt;imm;is_signed} ->
+          let successor_labels =
+            Label.Set.singleton lt
+            |> Label.Set.add gt
+            |> Label.Set.add eq
+          in
+          (match Label.Set.cardinal successor_labels with
+           | 0 -> assert false
+           | 1 -> branch_or_fallthrough (Label.Set.min_elt successor_labels)
+           | 2 | 3 ->
+             (* If fallthrough label is a successor, do not emit a jump for it.
+                Otherwise, the last jump could be unconditional. *)
+             let last =
+               if Label.Set.mem next.label successor_labels then
+                 next.label
+               else
+                 Label.Set.min_elt successor_labels
+             in
+             let init = branch_or_fallthrough last in
+             Label.Set.fold (fun lbl acc ->
+                 let cond = mk_int_test
+                              ~lt:(Label.equal lt lbl)
+                              ~eq:(Label.equal eq lbl)
+                              ~gt:(Label.equal gt lbl)
+                 in
+                 let comp =
+                   match is_signed with
+                   | true -> Mach.Isigned cond
+                   | false -> Mach.Iunsigned cond
+                 in
+                 let test =
+                   match imm with
+                   | None -> Mach.Iinttest comp
+                   | Some n -> Iinttest_imm (comp, n)
+                 in
+                 L.Lcondbranch (test, lbl)::acc)
+               (Label.Set.remove last successor_labels)
+               init
+           | _ -> assert false)
+      )
   in
   List.fold_left
     (fun next desc -> to_linear_instr ~like:terminator desc ~next)
@@ -167,7 +309,8 @@ let need_starting_label (cfg_with_layout : CL.t) (block : Cfg.basic_block)
             let new_labels = CL.new_labels cfg_with_layout in
             CL.preserve_orig_labels cfg_with_layout
             && not (Label.Set.mem block.start new_labels)
-        | _ -> (* CR xclerc: rather enumerate the constructors? *)
+        | Return | Raise _ | Tailcall _
+          -> (* XCR xclerc: rather enumerate the constructors? *)
           assert false )
 
 let adjust_trap_depth body (block : Cfg.basic_block)
@@ -253,3 +396,5 @@ let print_assembly (blocks : Cfg.basic_block list) =
   Emit.fundecl fundecl;
   X86_proc.generate_code
     (Some (X86_gas.generate_asm !Emitaux.output_channel))
+
+

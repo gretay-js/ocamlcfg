@@ -1,101 +1,104 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCamlFDO                               *)
-(*                                                                        *)
-(*                     Greta Yorsh, Jane Street Europe                    *)
-(*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
+[@@@ocaml.warning "+a-30-40-41-42"]
 module C = Cfg
-module Int = Numbers.Int
 
-let block (block : C.basic_block) =
-  let t = block.terminator in
-  match t.desc with
-  | Branch successors ->
-      (* Merge successors that go to the same label. Preserves the order of
-         successors, except that successors sharing the same label target are
-         grouped. *)
-      (* CR-soon gyorsh: pairwise join of conditions is not canonical,
-         because some joins are not representable as a condition. *)
-      (* CR xclerc: this code is generic, but it feels like is has been exercized
-       * only/mainly with branches with two successors. The semantics of
-       * the list of conditions is not very clear to me if e.g. we simplify,
-       * fail to simplify, and then simplify again. *)
-      let labels_to_conds =
-        List.fold_left
-          (fun labels_to_conds (cond, label) ->
-            let cond =
-              match Int.Map.find_opt label labels_to_conds with
-              | None -> [cond] (* Not seen this target yet *)
-              | Some (joined_cond :: rest) -> (
-                  (* Some disjunctions of floating point comparisons cannot
-                     be representated as a single condition. *)
-                  match
-                    Simplify_comparisons.disjunction cond joined_cond
-                  with
-                  | Ok cond -> cond :: rest
-                  | Cannot_simplify -> cond :: joined_cond :: rest )
-              | Some [] ->
-                  (* This case is impossible becase we never add an empty list
-                     to [labels_to_conds]. *)
-                  assert false
-            in
-            Int.Map.add label cond labels_to_conds)
-          Int.Map.empty successors
-      in
-      let new_successors =
-        Int.Map.bindings labels_to_conds
-        |> List.map (fun (label, conds) ->
-               List.map (fun cond -> (cond, label)) conds)
-        |> List.concat
-      in
-      let cmp = List.compare_lengths new_successors successors in
-      assert (cmp <= 0);
-      if cmp < 0 then
-        block.terminator <- { t with desc = Branch new_successors }
-  | Switch labels -> (
-      (* Convert simple [Switch] to branches. *)
-      (* Find position k and label l such that label.(j) = l for all j =
-         k..len-1. *)
-      let len = Array.length labels in
-      if len < 1 then
-        Misc.fatal_error "Malformed terminator: switch with empty arms";
-      let l = labels.(len - 1) in
-      let rec find_pos k =
-        if k = 0 then 0
-        else if labels.(k - 1) = l then find_pos (k - 1)
-        else k
-      in
-      let k = find_pos (len - 1) in
-      assert (k >= 0 && k < len);
-      (* CR xclerc: not sure it matters, but it feels weird to have an
-       * optimization that is asymmetrical. From what I understand:
-       * - `Switch [a, b, c, c, ..., c]` would be optimized;
-       * - `Switch [a, a, ..., a, b, c]` would not be optimized. *)
-      match k with
-      | 0 ->
-          (* All labels are the same and equal to l *)
-          block.terminator <- { t with desc = Branch [(Always, l)] }
-      | 1 ->
-          let t0 = C.Test (Iinttest_imm (Iunsigned Clt, 1)) (* arg < 1 *) in
-          let t1 = C.Test (Iinttest_imm (Iunsigned Cge, 1)) (* arg >= 1 *) in
-          block.terminator <-
-            { t with desc = Branch [(t0, labels.(0)); (t1, l)] }
-      | 2 ->
-          let t0 = C.Test (Iinttest_imm (Iunsigned Clt, 1)) (* arg < 1 *) in
-          let t1 = C.Test (Iinttest_imm (Iunsigned Ceq, 1)) (* arg = 1 *) in
-          let t2 = C.Test (Iinttest_imm (Iunsigned Cgt, 1)) (* arg > 1 *) in
-          block.terminator <-
-            { t with
-              desc = Branch [(t0, labels.(0)); (t1, labels.(1)); (t2, l)]
-            }
-      | _ -> () )
+(* Convert simple [Switch] to branches. *)
+let simplify_switch (block : C.basic_block) labels =
+  (* XCR xclerc: not sure it matters, but it feels weird to have an
+   * optimization that is asymmetrical. From what I understand:
+   * - `Switch [a, b, c, c, ..., c]` would be optimized;
+   * - `Switch [a, a, ..., a, b, c]` would not be optimized.
+
+     gyorsh: ah, yes, we can use arbitrary [n] for the case of two targets.
+     Lcondbranch3 is asymmetrical by definition. fixed. *)
+  let len = Array.length labels in
+  if len < 1 then
+    Misc.fatal_error "Malformed terminator: switch with empty arms";
+  (* Count continuois repeated occurrences of labels *)
+  let labels_with_counts =
+    Array.fold_right
+      (fun l acc ->
+         if (List.compare_length_with acc 3) > 0 then acc
+         else match acc with
+           | [] -> [(l,1)]
+           | (hd,n)::tl -> if hd = l then (hd,n+1)::tl else (l,1)::acc
+      )
+      labels
+      []
+  in
+  match labels_with_counts with
+  | [(l,1)] ->
+    (* All labels are the same and equal to l *)
+    block.terminator <- { block.terminator with desc = Branch (Always l) }
+  | [(l0,n);(ln,k)] ->
+    assert (labels.(0) = l0);
+    assert (labels.(n) = ln);
+    assert (len = n+k);
+    let successors = C.Int_test
+                       {
+                         is_signed = false;
+                         imm = Some n;
+                         lt = l0;
+                         eq = ln;
+                         gt = ln;
+                       }
+    in
+    block.terminator <- { block.terminator with desc = Branch successors }
+  | [(l0,1);(l1,1);(l2,n)] ->
+    assert (labels.(0) = l0);
+    assert (labels.(1) = l1);
+    assert (labels.(2) = l2);
+    assert (len = n+2);
+    let successors = C.Int_test
+                       {
+                         is_signed = false;
+                         imm = Some 1;
+                         lt = l0;
+                         eq = l1;
+                         gt = l2
+                       }
+    in
+    block.terminator <- { block.terminator with desc = Branch successors}
   | _ -> ()
 
-let run t = C.iter_blocks t ~f:(fun _ b -> block b)
+(* CR-soon gyorsh: merge (Lbranch | Lcondbranch | Lcondbranch3)+ into a
+   single terminator when the argments are the same. Enables reordering
+   of branch instructions and save cmp instructions. The main problem
+   is that it involves boolean combination of conditionals of type
+   Mach.test that can arise from a sequence of branches. When all
+   conditions in the combination are integer comparisons, we can
+   simplify them into a single condition, but it doesn't work for
+   Ieventest and Ioddtest (which come from the primitive "is integer").
+   The advantage is that it will enable us to reorder branch
+   instructions to avoid generating jmp to fallthrough location in the
+   new order. Also, for linear to cfg and back will be harder to
+   generate exactly the same layout. Also, how do we map execution
+   counts about branches onto this terminator? *)
+let block cfg (block : C.basic_block) =
+  match block.terminator.desc with
+  | Branch (Always _) -> ()
+  | Branch (Is_even _ | Is_true _ | Int_test _ | Float_test _) ->
+      let labels = C.successor_labels cfg ~normal:true ~exn:false block in
+      if Label.Set.cardinal labels = 1 then (
+        let l = Label.Set.min_elt labels in
+        block.terminator <- { block.terminator with desc = Branch (Always l) }
+      )
+  | Switch labels -> simplify_switch block labels
+  | Tailcall (Self _ | Func _) | Raise _ | Return  -> ()
+
+let run cfg = C.iter_blocks cfg ~f:(fun _ b -> block cfg b)
+
+
+(* XCR xclerc: this code is generic, but it feels like is has been exercized
+ * only/mainly with branches with two successors. The semantics of
+ * the list of conditions is not very clear to me if e.g. we simplify,
+ * fail to simplify, and then simplify again.
+
+   gyorsh: the new representation of terminators does not need to be
+   simplified in this way. It keeps disjoint conditions explicitly
+   and allows redundancy in the target labels, i.e.,
+   more than one conditions to go to the same label.
+   The simplification is done in cfg_to_linear, where
+   conditions that go to the same label are emitted as one opcode
+   (conditions jump with the appropriate condition),
+   whever possible, and everything is representable.
+*)

@@ -1,20 +1,6 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCamlFDO                               *)
-(*                                                                        *)
-(*                     Greta Yorsh, Jane Street Europe                    *)
-(*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
-
 (** External interface to the ocamlcfg library. *)
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
+[@@@ocaml.warning "+a-30-40-41-42"]
 
 module Cfg : sig
   include module type of struct
@@ -39,14 +25,16 @@ module Cfg : sig
 
   val get_block : t -> Label.t -> Basic_block.t option
 
-  (** [successor_labels] only returns non-exceptional edges. *)
-  (* CR xclerc for xclerc: does the fact that we need to pass `t` mean that
+  (** [successor_labels] only returns non-exceptional edges.
+      We need to pass [t] because the successor label of terminator
+      (Tailcall Self) is recorded in [t], and not in the basic_block. *)
+  (* XCR xclerc for xclerc: does the fact that we need to pass `t` mean that
      this function can fail? *)
-  (* CR xclerc: document the fact that is returns only non-exn successors? *)
+  (* XCR xclerc: document the fact that is returns only non-exn successors? *)
   val successor_labels : t -> Basic_block.t -> Label.t list
 
-  (* CR xclerc: could be `predecessor_labels`, for the sake of consistency. *)
-  val predecessors : Basic_block.t -> Label.t list
+  (* XCR xclerc: could be `predecessor_labels`, for the sake of consistency. *)
+  val predecessor_labels : Basic_block.t -> Label.t list
 
   val fun_name : t -> string
 
@@ -64,7 +52,7 @@ module Cfg_with_layout : sig
 
   val set_layout : t -> Label.t list -> unit
 
-  val print_dot :
+  val save_as_dot :
     t ->
     ?show_instr:bool ->
     ?show_exn:bool ->

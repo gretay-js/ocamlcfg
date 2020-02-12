@@ -1,31 +1,19 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCamlFDO                               *)
-(*                                                                        *)
-(*                     Greta Yorsh, Jane Street Europe                    *)
-(*                                                                        *)
-(*   Copyright 2019 Jane Street Group LLC                                 *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
+[@@@ocaml.warning "+a-30-40-41-42"]
 
-[@@@ocaml.warning "+a-4-30-40-41-42"]
-
-(* CR mshinwell: I'm unsure why this needs to be [private] when there are
+(* XCR mshinwell: I'm unsure why this needs to be [private] when there are
    accessor functions below. *)
-type t = private
+type t =
   { cfg : Cfg.t;
-    (* CR xclerc: my understanding is that `layout` is the list of
+    (* XCR xclerc: my understanding is that `layout` is the list of
      * the label, in the order in which they appearted in the source
      * linear representation. I would add a comment with this piece
      * of information. *)
     mutable layout : Label.t list;
+    (** the order in which blocks should be emitted *)
     mutable new_labels : Label.Set.t;
-    (* Set for validation, unset for optimization. *)
+    (** for validation, keep track of labels created by linear_to_cfg *)
     preserve_orig_labels : bool
+    (** Set for validation, unset for optimization. *)
   }
 
 val create :
@@ -45,13 +33,14 @@ val new_labels : t -> Label.Set.t
 
 val set_layout : t -> Label.t list -> unit
 
-val remove_from_new_labels : t -> Label.t -> unit
+(** Remove from cfg, layout, and other data-structures that track labels. *)
+val remove_block : t -> Label.t -> unit
 
 val is_trap_handler : t -> Label.t -> bool
 
-(* CR xclerc: the name is a bit misleading, as this function is actually
+(* XCR xclerc: the name is a bit misleading, as this function is actually
  * creating a file. *)
-val print_dot :
+val save_as_dot :
   t ->
   ?show_instr:bool ->
   ?show_exn:bool ->
