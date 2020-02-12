@@ -1,5 +1,7 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+module Label = Label
+
 module Cfg = struct
   include Cfg
 
@@ -13,8 +15,8 @@ module Cfg = struct
     let terminator t = t.terminator
   end
 
-  let successor_labels t b = successor_labels t ~normal:true ~exn:false b
-                             |> Label.Set.elements
+  let successor_labels t b =
+    successor_labels t ~normal:true ~exn:false b |> Label.Set.elements
 end
 
 module Cfg_with_layout = struct
