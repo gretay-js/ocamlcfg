@@ -88,7 +88,7 @@ module S = struct
       lt : Label.t;
       eq : Label.t;
       gt : Label.t;
-      uo : Label.t; (* if x and y are NaN *)
+      uo : Label.t; (* if x or y are NaN *)
     }
 
   (** Properties of the representation of successors:
@@ -125,6 +125,7 @@ module S = struct
     | Poptrap
     | Prologue
 
+  (* CR gyorsh: inline successors definition here instead of branch any more *)
   type terminator =
     | Branch of successors
     | Switch of Label.t array
