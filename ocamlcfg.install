@@ -7,9 +7,10 @@ lib: [
   "_build/install/default/lib/ocamlcfg/.private/ocamlcfg__Eliminate_dead_blocks.cmi" {".private/ocamlcfg__Eliminate_dead_blocks.cmi"}
   "_build/install/default/lib/ocamlcfg/.private/ocamlcfg__Eliminate_fallthrough_blocks.cmi" {".private/ocamlcfg__Eliminate_fallthrough_blocks.cmi"}
   "_build/install/default/lib/ocamlcfg/.private/ocamlcfg__Extra_debug.cmi" {".private/ocamlcfg__Extra_debug.cmi"}
+  "_build/install/default/lib/ocamlcfg/.private/ocamlcfg__Label.cmi" {".private/ocamlcfg__Label.cmi"}
   "_build/install/default/lib/ocamlcfg/.private/ocamlcfg__Linear_to_cfg.cmi" {".private/ocamlcfg__Linear_to_cfg.cmi"}
   "_build/install/default/lib/ocamlcfg/.private/ocamlcfg__Linear_utils.cmi" {".private/ocamlcfg__Linear_utils.cmi"}
-  "_build/install/default/lib/ocamlcfg/.private/ocamlcfg__Simplify_comparisons.cmi" {".private/ocamlcfg__Simplify_comparisons.cmi"}
+  "_build/install/default/lib/ocamlcfg/.private/ocamlcfg__Simplify_terminator.cmi" {".private/ocamlcfg__Simplify_terminator.cmi"}
   "_build/install/default/lib/ocamlcfg/.private/ocamlcfg__Trap_stack.cmi" {".private/ocamlcfg__Trap_stack.cmi"}
   "_build/install/default/lib/ocamlcfg/META"
   "_build/install/default/lib/ocamlcfg/cfg.ml"
@@ -71,7 +72,6 @@ lib: [
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Extra_debug.cmt"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Extra_debug.cmti"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Extra_debug.cmx"
-  "_build/install/default/lib/ocamlcfg/ocamlcfg__Label.cmi"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Label.cmt"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Label.cmti"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Label.cmx"
@@ -81,10 +81,6 @@ lib: [
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Linear_utils.cmt"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Linear_utils.cmti"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Linear_utils.cmx"
-  "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_comparisons.cmt"
-  "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_comparisons.cmti"
-  "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_comparisons.cmx"
-  "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_terminator.cmi"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_terminator.cmt"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_terminator.cmti"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Simplify_terminator.cmx"
@@ -92,13 +88,12 @@ lib: [
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Trap_stack.cmti"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Trap_stack.cmx"
   "_build/install/default/lib/ocamlcfg/opam"
-  "_build/install/default/lib/ocamlcfg/simplify_comparisons.ml"
-  "_build/install/default/lib/ocamlcfg/simplify_comparisons.mli"
   "_build/install/default/lib/ocamlcfg/simplify_terminator.ml"
   "_build/install/default/lib/ocamlcfg/simplify_terminator.mli"
   "_build/install/default/lib/ocamlcfg/trap_stack.ml"
   "_build/install/default/lib/ocamlcfg/trap_stack.mli"
 ]
 doc: [
+  "_build/install/default/doc/ocamlcfg/LICENSE.md"
   "_build/install/default/doc/ocamlcfg/README.md"
 ]
