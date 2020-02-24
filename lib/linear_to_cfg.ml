@@ -672,7 +672,7 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
      don't think a new type needs to cause any change in efficiency. A custom
      hashtable can be made with the appropriate hashing and equality
      functions. *)
-  let traps = T.push T.empty t.interproc_handler in
+  let traps = T.push (T.empty ()) t.interproc_handler in
   let trap_depth = 0 in
   let entry_block =
     create_empty_block t t.cfg.entry_label ~trap_depth ~traps

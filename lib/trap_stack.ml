@@ -13,7 +13,7 @@ sig
   type d
   type t
   exception Unresolved
-  val empty : t
+  val empty : unit -> t
   val unknown : unit -> t
   val pop : t -> t
   val push : t -> d -> t
@@ -63,16 +63,16 @@ struct
     | Link h -> rep_h h
     | Unknown | Label _ -> h
 
-  (* XCR xclerc: sorry for the back and forth, but I still think it is dangerous.
-   * Not as of today, since I now understand the provided operations cannot change
-   * a reference whose contents is `Empty`. However, if someone adds an operation
-   * that does not respect this property, it might induce hard-to-track bugs.
-   * If you are worried about additional allocations, I would suggest adding a
-   * comment stating why it is safe to share `ref Empty`.
-
-   gyorsh: sorry, I do not understand how to fix it. I'll try to ask you offline about
-     this. *)
-  let empty = ref Empty
+  (* Empty is not shared, for safety, at the cost of additional allocations.  The current
+     implementation does not change a reference whose contents is `Empty`. However, if
+     someone adds an operation that does not respect this property, it might induce
+     hard-to-track bugs.  Currently, the only client of this code is linear_to_cfg, which
+     invokes [empty ()] only once per cfg, so the additonal allocation is negligible
+     compared to everything else constructed in the same pass. Another client may choose
+     to reusing the reference, and rely on the specifics of the current implementation,
+     breaking abstraction.
+  *)
+  let empty () = ref Empty
 
   let unknown () = ref (Unknown : stack)
 

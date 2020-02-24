@@ -37,15 +37,6 @@ let simplify_switch (block : C.basic_block) labels =
     in
     block.terminator <- { block.terminator with desc = Branch successors }
   | [(l0,1);(l1,1);(l2,n)] ->
-    (* XCR xclerc: this is still asymmetric; the optimization should also be
-     * applied for [(l0,n);(l1,1);(l2,1)]. More generally, it should trigger
-     * for [(l0,m);(l1,1);(l2,n)].
-     * xclerc: sorry, it looks like I was misremembering the semantics of
-     * `Lcondbrach3`; this CR should be removed if the semantics of
-     * `Lcondbrach3 (a, b, c)` is indeed:
-     *  - jump to a if below 1
-     *  - jump to b if equal to 1
-     *  - jump to c if above 1. *)
     assert (Label.equal labels.(0) l0);
     assert (Label.equal labels.(1) l1);
     assert (Label.equal labels.(2) l2);

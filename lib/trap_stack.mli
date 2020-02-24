@@ -30,7 +30,7 @@ sig
 
   exception Unresolved
 
-  val empty : t
+  val empty : unit -> t
   (** Returns the representation of an empty stack. *)
 
   val unknown : unit -> t
