@@ -16,7 +16,8 @@ type basic_block =
     mutable exns : Label.Set.t;
     mutable can_raise : bool;
     mutable can_raise_interproc : bool;
-    mutable is_trap_handler : bool
+    mutable is_trap_handler : bool;
+    mutable dead : bool;
   }
 
 type t =
@@ -44,8 +45,8 @@ let successor_labels_normal t ti =
     match successors with
     | Always l -> Label.Set.singleton l
     | Is_even { ifso; ifnot; } | Is_true { ifso; ifnot;} ->
-      if Label.equal ifso ifnot then Label.Set.singleton ifso
-      else Label.Set.singleton ifso |> Label.Set.add ifnot
+      Label.Set.singleton ifso
+      |> Label.Set.add ifnot
     | Float_test {lt;gt;eq;uo} ->
       Label.Set.singleton lt
       |> Label.Set.add gt
@@ -73,7 +74,6 @@ let successor_labels t ~normal ~exn block =
 let predecessor_labels block = Label.Set.elements block.predecessors
 
 let replace_successor_labels t ~normal ~exn block ~f =
-  (* XCR xclerc: should we check whether the new labels are in `t`? *)
   (* Check that the new labels are in [t] *)
   let f src =
     let dst = f src in
@@ -96,18 +96,6 @@ let replace_successor_labels t ~normal ~exn block ~f =
         | Float_test {lt;eq;gt;uo} ->
           Float_test {lt=f lt; eq = f eq; gt = f gt; uo = f uo}
       in
-      (* XCR xclerc:
-       * There is also the question of the associated conditions;
-       * e.g. if `[Test t1, ...; Test t2, ...]` then `t1` must be the
-       * inverse of `t2`.
-
-         gyorsh: changing the labels does not change the conditions,
-         so the "inverse" property (or more generally: an input state
-         satisfies exactly one condition) still holds,
-         but the target labels may be the same.
-
-         Disjoint conditions is now guaranteed by the type of
-         successors, and redundant labels are allowed.  *)
       block.terminator <-
         { block.terminator with desc = Branch new_successors }
     | Switch labels ->
@@ -125,9 +113,6 @@ let replace_successor_labels t ~normal ~exn block ~f =
          to t.fun_tailrec_entry_point_label and [f] itself is defined
          in disconnect_block.ml as before.
       *)
-      (* XCR xclerc: should we check whether the new label is in `t`?
-
-         gyorsh: done. *)
       t.fun_tailrec_entry_point_label <- f t.fun_tailrec_entry_point_label
     | Return | Raise _ | Tailcall (Func _) -> ());
   ()
@@ -152,7 +137,6 @@ let entry_label t = t.entry_label
 let fun_tailrec_entry_point_label t = t.fun_tailrec_entry_point_label
 
 let set_fun_tailrec_entry_point_label t label =
-  (* XCR xclerc: I would check/assert that the passed label is in `t` *)
   if not (mem_block t label) then
      Misc.fatal_errorf "Cfg.set_fun_tailrec_entry_point_label: \n\
                          label %d not found in the cfg" label;
@@ -171,7 +155,9 @@ let iter_blocks t ~f = Label.Tbl.iter f t.blocks
    because there is no interface to call them. Eventually this won't be
    needed when we change cfg to have its own types rather than referring back
    to mach and cmm. *)
-(* CR-someday gyorsh: better printing, using the dreaded format? *)
+(* CR-someday gyorsh: implement desc printing, and args/res/dbg, etc, properly, with
+   regs, use the dreaded Format. *)
+
 let intcomp (comp : Mach.integer_comparison) =
   match comp with
   | Isigned c -> Printf.sprintf " %ss " (Printcmm.integer_comparison c)
@@ -231,8 +217,6 @@ let print_call oc = function
       | Direct { func_symbol : string; _ } ->
           Printf.fprintf oc "direct %s" func_symbol )
 
-(* CR-someday gyorsh: implement desc printing, and args/res/dbg, etc, properly, with
-   regs, use the dreaded Format. *)
 let print_basic oc i =
   Printf.fprintf oc "%d: " i.id;
   match i.desc with

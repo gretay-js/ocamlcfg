@@ -88,16 +88,6 @@ let get_new_linear_id () =
   last_linear_id := id + 1;
   id
 
-let create_empty_instruction ?(trap_depth = 0) desc : _ C.instruction =
-  { desc;
-    arg = [||];
-    res = [||];
-    dbg = Debuginfo.none;
-    live = Reg.Set.empty;
-    trap_depth;
-    id = get_new_linear_id ()
-  }
-
 let create_instruction desc ~trap_depth (i : Linear.instruction) :
     _ C.instruction =
   { desc;
@@ -150,17 +140,27 @@ let record_exn t (block : C.basic_block) traps =
   | Some ls -> Label.Tbl.replace t.exns block.start (traps :: ls)
 
 let create_empty_block t start ~trap_depth ~traps =
+  let terminator : C.terminator C.instruction =
+    { desc = C.Return (* placeholder for terminator, to be replaced *);
+      arg = [||];
+      res = [||];
+      dbg = Debuginfo.none;
+      live = Reg.Set.empty;
+      trap_depth;
+      id = get_new_linear_id ()
+    }
+  in
   let block : C.basic_block =
     { start;
       body = [];
-      (* placeholder for terminator, to be replaced *)
-      terminator = create_empty_instruction C.Return;
+      terminator;
       exns = Label.Set.empty;
       predecessors = Label.Set.empty;
       trap_depth;
       is_trap_handler = false;
       can_raise = false;
-      can_raise_interproc = false
+      can_raise_interproc = false;
+      dead = false;
     }
   in
   record_traps t start traps;
@@ -218,23 +218,15 @@ let _can_raise_basic (i : C.basic) =
      library it's probably ok. *)
   match i with
   | Call _ -> true
-  (* XCR xclerc for xclerc: double check that Op (... int div)  cannot raise.
-
-     gyorsh: no, it's taken care of in cmmgen which inserts an explicit check
-     and raise of caml_exn_Division_by_zero.
-  *)
-  (* XCR xclerc for xclerc: double check that Op (Specific ...) cannot raise
-
-     gyrosh: architecture specific are not allowed to raise,
-     see Mach.operation_can_raise. *)
   | Op _ -> false
   | Reloadretaddr | Pushtrap _ | Poptrap | Prologue -> false
 
 let can_raise_terminator (i : C.terminator) =
   (* XCR mshinwell: Make match exhaustive *)
   match i with
-  | Raise _ | Tailcall _ -> true
-  | Branch _ | Switch _ | Return -> false
+  | Raise _ | Tailcall (Func _) ->
+     true
+  | Branch _ | Switch _ | Return | Tailcall (Self _)-> false
 
 let check_traps t label (block : C.basic_block) =
   match Label.Tbl.find_opt t.trap_stacks label with
@@ -251,7 +243,12 @@ let check_traps t label (block : C.basic_block) =
            but trap_stack_at_start length=%d"
           block.trap_depth (List.length trap_labels);
     | exception T.Unresolved ->
-      (* must be dead block *)
+      (* At the end of the cfg construction, some blocks may have
+         unresolved trap stacks. All these blocks must be dead, i.e., unreachable from
+         entry of the function.  This check can done as a separate pass in dead block
+         elimination. Here we need keep track of blocks with unresolved trap_stacks,
+         because t.trap_stacks is not available after cfg construction.  *)
+      block.dead <- true;
       if !C.verbose then
         Printf.printf
           "unknown trap stack at label %d, the block must be dead, or \
@@ -296,6 +293,7 @@ let register_exns t label (block : C.basic_block) =
           (Label.Set.add l acc)
       | exception T.Unresolved ->
         (* must be dead block or flow from exception handler only *)
+        assert block.dead;
         if !C.verbose then
           Printf.printf
             "unknown trap stack in exns of block %d: \
@@ -345,8 +343,6 @@ let check_and_register_traps t =
      then it has a registered exn successor or interproc exn. *)
   let f _ (block : C.basic_block) =
     let n = Label.Set.cardinal block.exns in
-    (* XCR xclerc: what is it supposed to check?
-       gyorsh: ooops! *)
     assert ((not block.can_raise_interproc) || block.can_raise);
     assert ((not block.can_raise) || n > 0 || block.can_raise_interproc)
   in
@@ -394,12 +390,6 @@ let of_cmm_float_test ~lbl ~inv (cmp : Cmm.float_comparison) : C.float_test =
   | CFgt -> { eq = inv; lt = inv; gt = lbl; uo = inv }
   | CFle -> { eq = lbl; lt = lbl; gt = inv; uo = inv }
   | CFge -> { eq = lbl; lt = inv; gt = lbl; uo = inv }
-  (* XCR xclerc: I am confused: why are the cases below unordered?
-
-     gyorsh: terminology unordered is used to refer
-     to some comparisons that involve NaNs.
-     For example, when x is a NaN, CFneq x x is true.
-  *)
   | CFneq -> { eq = inv; lt = lbl; gt = lbl; uo = lbl }
   | CFnlt -> { eq = lbl; lt = inv; gt = lbl; uo = lbl }
   | CFngt -> { eq = lbl; lt = lbl; gt = inv; uo = lbl }
@@ -425,9 +415,16 @@ let block_is_registered t (block : C.basic_block) =
   Label.Tbl.mem t.cfg.blocks block.start
 
 let add_terminator t (block : C.basic_block) (i : L.instruction)
-    (desc : C.terminator) ~trap_depth ~traps =
+      (desc : C.terminator) ~trap_depth ~traps =
+    (* All terminators are followed by a label, except branches we created for
+       fallthroughs in Linear. *)
+    (* CR gyorsh for mshinwell: you asked in the previous review round:
+       "What exactly determines which ones of these must be followed by a label?"
+       and I put in the comment above, but then you removed the case for Branch,
+       I think, not sure why, and it is needed. I am putting it back. *)
   ( match desc with
-  | Branch _ | Switch _ | Return | Raise _ | Tailcall _ ->
+    | Branch _ -> ()
+    | Switch _ | Return | Raise _ | Tailcall _ ->
       if not (Linear_utils.defines_label i.next) then
         Misc.fatal_errorf "Linear instruction not followed by label:@ %a"
           Printlinear.instr
@@ -510,13 +507,21 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
         Misc.fatal_errorf "End of function without terminator for block %d"
           block.start
   | Llabel start ->
+    (*   Not all labels need to start a new block.
+         Keep the translation from linear to cfg simple, and
+         optimize (remove/merge blocks) in a separate pass, because:
+         - correctness of linear to cfg and back is easier to reason about.
+         - the optimizations are easier to implement and reason about on the CFG.
+         - some optimization opportunities cannot be identified in a single pass
+           on the Linear IR, during cfg construction.
+         - optimizations can be enabled by the client of the library whenever needed *)
       if !C.verbose then
         Printf.printf "Llabel start=%d, block.start=%d\n" start block.start;
       (* Labels always cause a new block to be created. If the block prior to
          the label falls through, an explicit successor edge is added. *)
       if not (block_is_registered t block) then (
         let fallthrough : C.terminator = Branch (Always start) in
-        block.terminator <- create_empty_instruction fallthrough ~trap_depth;
+        block.terminator <- create_instruction fallthrough i ~trap_depth;
         register_block t block traps );
       (* CR-soon gyorsh: check for multiple consecutive labels *)
       let new_block = create_empty_block t start ~trap_depth ~traps in

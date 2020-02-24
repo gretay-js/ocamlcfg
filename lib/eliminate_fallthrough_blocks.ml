@@ -6,19 +6,13 @@ module CL = Cfg_with_layout
 let is_fallthrough_block cfg_with_layout (block : C.basic_block) =
   let cfg = CL.cfg cfg_with_layout in
   if
-    (* XCR xclerc: should `block.can_raise_interproc` be added to the disjunction?
-
-       gyorsh: no, because fallthrough blocks are empty, and the only
-       way they can raise is if their terminator is raise
-       (and then it has 0 successors) or tailcall self,
-       which is not interproc.
-       in any case, [can_raise_interproc] implies [can_raise] so checking
-       can_raise is enough to decide that the block is not fallthrough.
-    *)
-    (Label.equal cfg.entry_label block.start) (* XCR xclerc: rather use `Label.equal`? *)
+    (Label.equal cfg.entry_label block.start)
     || block.is_trap_handler
     || List.length block.body > 0
     || block.can_raise
+    (* XCR mshinwell: I changed it back to this condition.
+       we need to check for can_raise here,
+       because of Tailcall to Self that can raise and has a single successor. *)
   then None
   else
     let successors = C.successor_labels ~normal:true ~exn:false cfg block in

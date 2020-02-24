@@ -17,9 +17,6 @@ type basic_block =
         Used for cross checking the construction of [exns],
         and for emitting adjust trap on edges
         from one block to the next. *)
-    (* XCR xclerc: there is no "trap_stack" below
-
-       gyorsh: moved to linear_to_cfg, where it belongs *)
     mutable exns : Label.Set.t;
         (** All possible handlers of a raise that
             (1) can be triggered either by an explicit raise or
@@ -36,9 +33,13 @@ type basic_block =
         (** This block raises an exn that is not handled in this function,
             [can_raise_interproc] implies [can_raise] but not necessarily vice
             versa. *)
-    mutable is_trap_handler : bool
+    mutable is_trap_handler : bool;
         (** Is this block a trap handler (i.e. is it an exn successor
             of another block) or not? *)
+    mutable dead : bool;
+        (** This block must be unreachable from function entry. This field is set during
+            cfg construction (if trap stacks are unresolved) and used during dead block
+            elimination for checking. *)
     (* CR-soon gyorsh: The current implementation allows multiple pushtraps in
        each block means that different trap stacks are associated with the block
        at different points, and a raise from this block
@@ -46,9 +47,10 @@ type basic_block =
        stack. After we split the blocks based on Pushtrap/Poptrap,
        each block will have a unique trap stack associated with it.
        [exns] will not be needed, as the exn-successor will be uniquely
-       determinted by can_raise + top of trap stack.
+       determined by can_raise + top of trap stack.
        [trap_depth] will not needed, as it can be derived with
        the length of the trap stack. *)
+
   }
 
 (** Control Flow Graph of a function. *)
@@ -122,12 +124,3 @@ val print_basic : out_channel -> basic instruction -> unit
    trap stack, instead of carrying the copy of the stack. *)
 
 (* CR-soon gyorsh: store label after separately and update after reordering. *)
-
-
-(*  XCR xclerc: have mixed feeling regarding the `Cfg_intf.Branch` constructor.
- I understand it is a generalization of unconditional, conditional, three-way
- (and possibly switch) branches, but it makes it possible to build values
-    that make no sense e.g. `Branch [Always, ...; Always, ...]`.
-
-    gyorsh: new representation address aimed to address this concern.
-*)

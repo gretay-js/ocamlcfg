@@ -1,13 +1,10 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 (* XCR mshinwell: I'm unsure why this needs to be [private] when there are
-   accessor functions below. *)
+   accessor functions below.
+   xclerc: I guess you mean the type could just be abstract? *)
 type t =
   { cfg : Cfg.t;
-    (* XCR xclerc: my understanding is that `layout` is the list of
-     * the label, in the order in which they appearted in the source
-     * linear representation. I would add a comment with this piece
-     * of information. *)
     mutable layout : Label.t list;
     (** the order in which blocks should be emitted *)
     mutable new_labels : Label.Set.t;
@@ -38,8 +35,6 @@ val remove_block : t -> Label.t -> unit
 
 val is_trap_handler : t -> Label.t -> bool
 
-(* XCR xclerc: the name is a bit misleading, as this function is actually
- * creating a file. *)
 val save_as_dot :
   t ->
   ?show_instr:bool ->

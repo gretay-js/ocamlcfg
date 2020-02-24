@@ -1,13 +1,12 @@
 (* XCR mshinwell: Please add file header and an explanation of what this
    module is doing (ideally with comments for each function below). *)
-(* XCR xclerc: the header is missing. *)
 [@@@ocaml.warning "+a-30-40-41-42"]
 (* Mutable representation of a stack of handlers.
 
-   Intended for computing a stack of trap handlers reachable a
+   Intended for computing a stack of trap handlers reachable
    at each program location in a function.
    The top of the stack represents the current trap handler,
-   which will be called if the current instruction raises.
+   which will be called if the current instruction raises an exception.
 *)
 
 
@@ -42,7 +41,7 @@ sig
 
   (** Returns list representation of stack [t], with the head of the list
       representing the top of the stack. Raises [Unresolved] if [t]
-      contains any [Unknown]. Does not terminate if [t] contains a cycle. *)
+      contains any [Unknown]. *)
   val to_list_exn : t -> d list
 
   (* XCR mshinwell: Document which is the "top" of the stack. *)
@@ -52,9 +51,10 @@ sig
   val top_exn : t -> d option
 
   val unify : t -> t -> unit
-  (** [unify s1 s2] fail if s1 and s2 do not agree on the known elements,
+  (** [unify s1 s2] fails if s1 and s2 do not agree on the known elements,
       and resolves unknowns whenever possible, destructively modifying
-      [s1] and [s2]. *)
+      [s1] and [s2]. Fails if the destructive update would create a cycle in
+      the data structure.  *)
 
   (* Debug printing *)
 

@@ -29,16 +29,11 @@ module Cfg : sig
 
   val get_block : t -> Label.t -> Basic_block.t option
 
-  (* XCR xclerc for xclerc: does the fact that we need to pass `t` mean that
-     this function can fail? *)
-  (* XCR xclerc: document the fact that is returns only non-exn successors? *)
-
   (** [successor_labels] only returns non-exceptional edges. We need to pass
       [t] because the successor label of terminator (Tailcall Self) is
       recorded in [t], and not in the basic_block. *)
   val successor_labels : t -> Basic_block.t -> Label.t list
 
-  (* XCR xclerc: could be `predecessor_labels`, for the sake of consistency. *)
   val predecessor_labels : Basic_block.t -> Label.t list
 
   val fun_name : t -> string

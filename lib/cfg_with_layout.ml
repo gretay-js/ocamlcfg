@@ -19,20 +19,16 @@ let preserve_orig_labels t = t.preserve_orig_labels
 let new_labels t = t.new_labels
 
 let set_layout t layout =
-  (* XCR xclerc: should we check whether the contents of `layout` is
-   * consistent with the one of `t`?
-  *)
   let cur_layout = Label.Set.of_list t.layout in
   let new_layout = Label.Set.of_list layout in
   if not (Label.Set.equal cur_layout new_layout &&
-          List.hd layout = t.cfg.entry_label) then
+          Label.equal (List.hd layout) t.cfg.entry_label) then
     Misc.fatal_error "Cfg set_layout: new layout is not a permutation of \
                       the current layout, or first label is not entry";
   t.layout <- layout
 
 let remove_block t label =
   Cfg.remove_block_exn t.cfg label;
-  (* XCR xclerc: `Label.equal`? *)
   t.layout <- List.filter (fun l -> not (Label.equal l label)) t.layout;
   t.new_labels <- Label.Set.remove label t.new_labels
 
@@ -119,12 +115,9 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
       let block = Label.Tbl.find t.cfg.blocks label in
       print_block_dot label block (Some index))
     t.layout;
-  (* CR xclerc for xclerc: . *)
-  assert (List.length t.layout <= Label.Tbl.length t.cfg.blocks);
   if List.length t.layout < Label.Tbl.length t.cfg.blocks then
     Label.Tbl.iter
       (fun label block ->
-        (* XCR xclerc: rather use `Label.equal`? *)
         match List.find_opt (fun lbl -> Label.equal label lbl) t.layout with
         | None -> print_block_dot label block None
         | _ -> ())
@@ -142,10 +135,6 @@ let save_as_dot t ?show_instr ?show_exn ?annotate_block
   if !Cfg.verbose then
     Printf.printf "Writing cfg for %s to %s\n" msg filename;
   let oc = open_out filename in
-  (* XCR xclerc: may never be closed
-
-     gyorsh: not sure why... is that the assert?
-     in any case, now the file handling is wrapped in try finally: *)
   Misc.try_finally (fun () ->
     print_dot t ?show_instr ?show_exn ?annotate_block ?annotate_succ oc)
     ~always:(fun () -> close_out oc)

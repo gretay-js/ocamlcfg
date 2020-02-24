@@ -53,7 +53,6 @@ struct
     | Link of h
     | Label of d
 
-  (* XCR xclerc: this comment looks outdated *)
   let rec rep (t : t) =
     match !t with
     | Link t -> rep t
@@ -64,11 +63,15 @@ struct
     | Link h -> rep_h h
     | Unknown | Label _ -> h
 
-  (* XCR xclerc: this seems quite dangerous; I would change the type of
-     `emp` to `unit -> stack`.
+  (* XCR xclerc: sorry for the back and forth, but I still think it is dangerous.
+   * Not as of today, since I now understand the provided operations cannot change
+   * a reference whose contents is `Empty`. However, if someone adds an operation
+   * that does not respect this property, it might induce hard-to-track bugs.
+   * If you are worried about additional allocations, I would suggest adding a
+   * comment stating why it is safe to share `ref Empty`.
 
-     gyorsh: the ref is not exposed at the interface,
-             as its type [t] is abstract. how is it dangerous? *)
+   gyorsh: sorry, I do not understand how to fix it. I'll try to ask you offline about
+     this. *)
   let empty = ref Empty
 
   let unknown () = ref (Unknown : stack)
@@ -79,15 +82,6 @@ struct
 
   exception Unresolved
 
-  (* CR-someday xclerc: if performance is not a concern, we may want to
-   * express `top_exn` in terms of `to_list` (to avoid code duplication).
-
-     gyorsh:
-     it is not the same because to_list_exn is recursive
-     so it ensures no Uknowns anywhere, whereas top_exn only checks
-     that the top of the stack is resolved.
-     In any case, to_list_exn is not used anywhere any more, so I removed it.
-  *)
   let top_exn t =
     match !(rep t) with
     | Empty -> None
@@ -99,14 +93,13 @@ struct
     | Link _ -> assert false (* removed by rep *)
     | Unknown -> raise Unresolved
 
-  (** Raises [Unresolved] if t contains any pop or Unknown. *)
+  (** Raises [Unresolved] if t contains any Unknown. *)
   let rec to_list_exn t =
     match !(rep t) with
     | Empty -> []
     | Push p -> (
         match !(rep_h p.h) with
         | Label l ->
-          (* This won't terminate if [t] has a cycle back to [t]. *)
           l :: to_list_exn p.t
         | Link _ -> assert false (* removed by rep_h *)
         | Unknown -> raise Unresolved )
@@ -172,7 +165,6 @@ struct
     | Unknown, _ -> link_h ~src:h1 ~dst:h2
     | _, Unknown -> link_h ~src:h2 ~dst:h1
     | Label l1, Label l2 ->
-      (* XCR xclerc: I would rather use Label.equal (defensive). *)
       if not (D.equal l1 l2) then (
         print_pair_h "handler labels disagree:" h1 h2;
         fail () )
@@ -196,13 +188,13 @@ struct
     (* create  a link from src to dst. *)
     src := Link dst
 
-  (* XCR-someday xclerc: that might be easy to debug, but at the same time
-   * it might cause problems e.g. in a CI context. *)
-  (* If there is a cycle, this won't terminate but that's easy to debug. If
-     there is no cycle, it terminates because every step decreases the
-     following well-founded order: (1) removes one unknown, (2) transforms one
-     pop into push, and there is no rule that creates pop from push, or (3)
-     reduces the length of the stack. *)
+  (* Given acyclic [s1] and [s2], [unify s1 s2] terminates
+     because every step removes one unknown or reduces the length of one of the argument
+     stacks by following a link or a push.
+     [unify] maintains the invariant that the data structure is acyclic.
+     The only operation that modifies the data structure in [link] or [link_h],
+     fails if the destructive update creates a cycle.
+  *)
   let rec unify s1 s2 =
     match (!s1, !s2) with
     | Empty, Empty -> ()

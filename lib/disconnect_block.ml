@@ -9,7 +9,6 @@ let update_predecessor's_terminators (cfg : C.t) ~pred_block
     if (Label.equal l being_disconnected) then
       target_label
     else l in
-  (* XCR xclerc: `Label.equal`? *)
   C.replace_successor_labels cfg ~normal:true ~exn:false pred_block
     ~f:replace_label
 
@@ -76,5 +75,10 @@ let disconnect cfg_with_layout label =
 
      gyorsh: no, it should be completely unreachable after this. removed
      the unnecessary updates, and moved the code to Cfg_with_layout.
+
+     xclerc: well, "someone" might have stored the label of the block, and
+     try to use it after it has been disconnected. Now that we check whether
+     a label is valid before trying to use it, I think an assertion will
+     be violated if this happens.
   *)
 

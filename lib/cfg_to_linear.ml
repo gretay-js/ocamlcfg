@@ -152,11 +152,6 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
         [L.Lop (Itailcall_imm { func = Cfg.fun_name cfg; label_after })]
     | Switch labels -> [L.Lswitch labels]
     | Branch successors -> (
-        (* XCR-someday xclerc: consider switching the ifs below to
-         * match eq label_p next.label, eq label_q next.label with
-         * | true, true -> []
-         * | false, false -> ...
-         * *)
         (* CR-soon gyorsh: refactor, a lot of redundant code
            for different cases *)
         (* CR-soon gyorsh: for successor labels that are not fallthrough,
@@ -168,6 +163,7 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
           if Label.equal next.label lbl then [] else [L.Lbranch lbl]
         in
         let emit_bool (c1,l1) (c2,l2) =
+          (* c1 must be the inverse of c2 *)
           match Label.equal l1 next.label, Label.equal l2 next.label with
           | true, true -> []
           | false, true -> [L.Lcondbranch (c1, l1)]
@@ -177,7 +173,7 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
               [L.Lbranch l1]
             else
               [L.Lcondbranch (c1, l1);
-               L.Lcondbranch (c2, l2)]
+               L.Lbranch l2]
         in
         match successors with
         | Always label -> branch_or_fallthrough label
@@ -186,7 +182,6 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
         | Is_true {ifso;ifnot} ->
           emit_bool (Itruetest, ifso) (Ifalsetest, ifnot)
         | Int_test {lt;eq;gt;imm=Some 1;is_signed=false} ->
-          (* XCR xclerc: use `Label.equal`? *)
           let find l = if Label.equal next.label l
             then None else Some l
           in
@@ -293,7 +288,7 @@ let need_starting_label (cfg_with_layout : CL.t) (block : Cfg.basic_block)
   else
     match Label.Set.elements block.predecessors with
     | [] | _ :: _ :: _ -> true
-    | [pred] when pred <> prev_block.start -> true
+    | [pred] when not (Label.equal pred prev_block.start) -> true
     | [_] -> (
         (* This block has a single predecessor which appears in the layout
            immediately prior to this block. *)
@@ -309,8 +304,7 @@ let need_starting_label (cfg_with_layout : CL.t) (block : Cfg.basic_block)
             let new_labels = CL.new_labels cfg_with_layout in
             CL.preserve_orig_labels cfg_with_layout
             && not (Label.Set.mem block.start new_labels)
-        | Return | Raise _ | Tailcall _
-          -> (* XCR xclerc: rather enumerate the constructors? *)
+        | Return | Raise _ | Tailcall _ ->
           assert false )
 
 let adjust_trap_depth body (block : Cfg.basic_block)
@@ -334,7 +328,7 @@ let run cfg_with_layout =
     if not (Label.Tbl.mem cfg.blocks label) then
       Misc.fatal_errorf "Unknown block labelled %d\n" label;
     let block = Label.Tbl.find cfg.blocks label in
-    assert (label = block.start);
+    assert (Label.equal label block.start);
     let body =
       let terminator =
         linearize_terminator cfg block.terminator ~next:!next

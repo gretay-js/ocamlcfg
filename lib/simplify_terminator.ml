@@ -3,35 +3,28 @@ module C = Cfg
 
 (* Convert simple [Switch] to branches. *)
 let simplify_switch (block : C.basic_block) labels =
-  (* XCR xclerc: not sure it matters, but it feels weird to have an
-   * optimization that is asymmetrical. From what I understand:
-   * - `Switch [a, b, c, c, ..., c]` would be optimized;
-   * - `Switch [a, a, ..., a, b, c]` would not be optimized.
-
-     gyorsh: ah, yes, we can use arbitrary [n] for the case of two targets.
-     Lcondbranch3 is asymmetrical by definition. fixed. *)
   let len = Array.length labels in
   if len < 1 then
     Misc.fatal_error "Malformed terminator: switch with empty arms";
-  (* Count continuois repeated occurrences of labels *)
+  (* Count continuous repeated occurrences of labels *)
   let labels_with_counts =
     Array.fold_right
       (fun l acc ->
          if (List.compare_length_with acc 3) > 0 then acc
          else match acc with
            | [] -> [(l,1)]
-           | (hd,n)::tl -> if hd = l then (hd,n+1)::tl else (l,1)::acc
+           | (hd,n)::tl -> if Label.equal hd l then (hd,n+1)::tl else (l,1)::acc
       )
       labels
       []
   in
   match labels_with_counts with
-  | [(l,1)] ->
+  | [(l,_)] ->
     (* All labels are the same and equal to l *)
     block.terminator <- { block.terminator with desc = Branch (Always l) }
   | [(l0,n);(ln,k)] ->
-    assert (labels.(0) = l0);
-    assert (labels.(n) = ln);
+    assert (Label.equal labels.(0) l0);
+    assert (Label.equal labels.(n) ln);
     assert (len = n+k);
     let successors = C.Int_test
                        {
@@ -44,9 +37,18 @@ let simplify_switch (block : C.basic_block) labels =
     in
     block.terminator <- { block.terminator with desc = Branch successors }
   | [(l0,1);(l1,1);(l2,n)] ->
-    assert (labels.(0) = l0);
-    assert (labels.(1) = l1);
-    assert (labels.(2) = l2);
+    (* XCR xclerc: this is still asymmetric; the optimization should also be
+     * applied for [(l0,n);(l1,1);(l2,1)]. More generally, it should trigger
+     * for [(l0,m);(l1,1);(l2,n)].
+     * xclerc: sorry, it looks like I was misremembering the semantics of
+     * `Lcondbrach3`; this CR should be removed if the semantics of
+     * `Lcondbrach3 (a, b, c)` is indeed:
+     *  - jump to a if below 1
+     *  - jump to b if equal to 1
+     *  - jump to c if above 1. *)
+    assert (Label.equal labels.(0) l0);
+    assert (Label.equal labels.(1) l1);
+    assert (Label.equal labels.(2) l2);
     assert (len = n+2);
     let successors = C.Int_test
                        {
@@ -86,19 +88,3 @@ let block cfg (block : C.basic_block) =
   | Tailcall (Self _ | Func _) | Raise _ | Return  -> ()
 
 let run cfg = C.iter_blocks cfg ~f:(fun _ b -> block cfg b)
-
-
-(* XCR xclerc: this code is generic, but it feels like is has been exercized
- * only/mainly with branches with two successors. The semantics of
- * the list of conditions is not very clear to me if e.g. we simplify,
- * fail to simplify, and then simplify again.
-
-   gyorsh: the new representation of terminators does not need to be
-   simplified in this way. It keeps disjoint conditions explicitly
-   and allows redundancy in the target labels, i.e.,
-   more than one conditions to go to the same label.
-   The simplification is done in cfg_to_linear, where
-   conditions that go to the same label are emitted as one opcode
-   (conditions jump with the appropriate condition),
-   whever possible, and everything is representable.
-*)
