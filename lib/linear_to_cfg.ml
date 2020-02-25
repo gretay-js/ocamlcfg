@@ -527,8 +527,8 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       let new_block = create_empty_block t start ~trap_depth ~traps in
       create_blocks t i.next new_block ~trap_depth ~traps
   | Lreturn ->
-      if trap_depth <> 0 then
-        Misc.fatal_errorf "Trap depth must be zero at Lreturn";
+      if trap_depth <> 1 then
+        Misc.fatal_errorf "Trap depth is %d, but it must be 0 at Lreturn" trap_depth;
       add_terminator t block i Return ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lraise kind ->
@@ -673,7 +673,7 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
      hashtable can be made with the appropriate hashing and equality
      functions. *)
   let traps = T.push (T.empty ()) t.interproc_handler in
-  let trap_depth = 0 in
+  let trap_depth = 1 in
   let entry_block =
     create_empty_block t t.cfg.entry_label ~trap_depth ~traps
   in
