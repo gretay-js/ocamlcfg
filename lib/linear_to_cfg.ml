@@ -130,7 +130,7 @@ let record_exn t (block : C.basic_block) traps =
 
 let create_empty_block t start ~trap_depth ~traps =
   let terminator : C.terminator C.instruction =
-    { desc = C.Return (* placeholder for terminator, to be replaced *);
+    { desc = C.Never (* placeholder for terminator, to be replaced *);
       arg = [||];
       res = [||];
       dbg = Debuginfo.none;
