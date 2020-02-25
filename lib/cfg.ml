@@ -1,5 +1,5 @@
-(* XCR mshinwell: Discuss licence, ensure headers are consistent and
-   check that author attributions are correct. *)
+(* XCR mshinwell: Discuss licence, ensure headers are consistent and check
+   that author attributions are correct. *)
 
 [@@@ocaml.warning "+a-30-40-41-42"]
 
@@ -17,7 +17,7 @@ type basic_block =
     mutable can_raise : bool;
     mutable can_raise_interproc : bool;
     mutable is_trap_handler : bool;
-    mutable dead : bool;
+    mutable dead : bool
   }
 
 type t =
@@ -38,38 +38,31 @@ let mem_block t label = Label.Tbl.mem t.blocks label
 
 let successor_labels_normal t ti =
   match ti.desc with
-  | Tailcall (Self _) ->  Label.Set.singleton t.fun_tailrec_entry_point_label
+  | Tailcall (Self _) -> Label.Set.singleton t.fun_tailrec_entry_point_label
   | Switch labels -> Array.to_seq labels |> Label.Set.of_seq
   | Return | Raise _ | Tailcall (Func _) -> Label.Set.empty
-  | Branch successors ->
-    match successors with
-    | Always l -> Label.Set.singleton l
-    | Is_even { ifso; ifnot; } | Is_true { ifso; ifnot;} ->
-      Label.Set.singleton ifso
-      |> Label.Set.add ifnot
-    | Float_test {lt;gt;eq;uo} ->
-      Label.Set.singleton lt
-      |> Label.Set.add gt
-      |> Label.Set.add eq
+  | Never -> Label.Set.empty
+  | Always l -> Label.Set.singleton l
+  | Is_even { ifso; ifnot } | Is_true { ifso; ifnot } ->
+      Label.Set.singleton ifso |> Label.Set.add ifnot
+  | Float_test { lt; gt; eq; uo } ->
+      Label.Set.singleton lt |> Label.Set.add gt |> Label.Set.add eq
       |> Label.Set.add uo
-    | Int_test {lt;gt;eq;imm=_;is_signed=_} ->
-      Label.Set.singleton lt
-      |> Label.Set.add gt
-      |> Label.Set.add eq
+  | Int_test { lt; gt; eq; imm = _; is_signed = _ } ->
+      Label.Set.singleton lt |> Label.Set.add gt |> Label.Set.add eq
 
 let successor_labels t ~normal ~exn block =
   (* XCR mshinwell: We need to resolve or defer all CRs before this can be
      used in production---what is happening with this one?
 
      gyorsh: This should have been a comment, not a CR, but it is not
-     relevant any more in the new representation. I removed the comment.
-  *)
+     relevant any more in the new representation. I removed the comment. *)
   match (normal, exn) with
   | false, false -> Label.Set.empty
   | true, false -> successor_labels_normal t block.terminator
   | false, true -> block.exns
   | true, true ->
-    Label.Set.union block.exns (successor_labels_normal t block.terminator)
+      Label.Set.union block.exns (successor_labels_normal t block.terminator)
 
 let predecessor_labels block = Label.Set.elements block.predecessors
 
@@ -78,49 +71,45 @@ let replace_successor_labels t ~normal ~exn block ~f =
   let f src =
     let dst = f src in
     if not (mem_block t dst) then
-      Misc.fatal_errorf "Cfg.replace_successor_labels: \n\
-                         new successor %d not found in the cfg" dst;
+      Misc.fatal_errorf
+        "Cfg.replace_successor_labels: \n\
+         new successor %d not found in the cfg" dst;
     dst
   in
   if exn then block.exns <- Label.Set.map f block.exns;
-  if normal then (
-    match block.terminator.desc with
-    | Branch successors ->
-      let new_successors =
-        match successors with
-        | Always l -> Always (f l)
-        | Is_even {ifso;ifnot} -> Is_even {ifso=f ifso;ifnot = f ifnot}
-        | Is_true {ifso;ifnot} -> Is_true {ifso=f ifso;ifnot = f ifnot}
-        | Int_test {lt;eq;gt;is_signed;imm} ->
-          Int_test {lt=f lt; eq = f eq; gt = f gt; is_signed;imm}
-        | Float_test {lt;eq;gt;uo} ->
-          Float_test {lt=f lt; eq = f eq; gt = f gt; uo = f uo}
-      in
-      block.terminator <-
-        { block.terminator with desc = Branch new_successors }
-    | Switch labels ->
-      let new_labels = Array.map f labels in
-      block.terminator <- { block.terminator with desc = Switch new_labels }
-    | Tailcall (Self _) ->
-      (* XCR mshinwell: It seems odd that this function will change the
-         entry point label in [t] no matter which [block] we have...
-         In fact, when this function lived in disconnect_block.ml, there
-         was the following check:
-         assert
-         (Label.equal being_disconnected cfg.fun_tailrec_entry_point_label);
+  if normal then
+    let desc =
+      match block.terminator.desc with
+      | Never -> Never
+      | Always l -> Always (f l)
+      | Is_even { ifso; ifnot } -> Is_even { ifso = f ifso; ifnot = f ifnot }
+      | Is_true { ifso; ifnot } -> Is_true { ifso = f ifso; ifnot = f ifnot }
+      | Int_test { lt; eq; gt; is_signed; imm } ->
+          Int_test { lt = f lt; eq = f eq; gt = f gt; is_signed; imm }
+      | Float_test { lt; eq; gt; uo } ->
+          Float_test { lt = f lt; eq = f eq; gt = f gt; uo = f uo }
+      | Switch labels -> Switch (Array.map f labels)
+      | Tailcall (Self _) ->
+          (* XCR mshinwell: It seems odd that this function will change the
+             entry point label in [t] no matter which [block] we have... In
+             fact, when this function lived in disconnect_block.ml, there was
+             the following check: assert (Label.equal being_disconnected
+             cfg.fun_tailrec_entry_point_label);
 
-         gyorsh: the check is still here, when [f] is applied
-         to t.fun_tailrec_entry_point_label and [f] itself is defined
-         in disconnect_block.ml as before.
-      *)
-      t.fun_tailrec_entry_point_label <- f t.fun_tailrec_entry_point_label
-    | Return | Raise _ | Tailcall (Func _) -> ());
-  ()
+             gyorsh: the check is still here, when [f] is applied to
+             t.fun_tailrec_entry_point_label and [f] itself is defined in
+             disconnect_block.ml as before. *)
+          t.fun_tailrec_entry_point_label <-
+            f t.fun_tailrec_entry_point_label;
+          block.terminator.desc
+      | Return | Raise _ | Tailcall (Func _) -> block.terminator.desc
+    in
+    block.terminator <- { block.terminator with desc }
 
 let remove_block_exn t label =
   match Label.Tbl.find t.blocks label with
   | exception Not_found ->
-    Misc.fatal_errorf "Cfg.remove_block: block %d not found" label
+      Misc.fatal_errorf "Cfg.remove_block: block %d not found" label
   | _ -> Label.Tbl.remove t.blocks label
 
 let get_block t label = Label.Tbl.find_opt t.blocks label
@@ -138,16 +127,16 @@ let fun_tailrec_entry_point_label t = t.fun_tailrec_entry_point_label
 
 let set_fun_tailrec_entry_point_label t label =
   if not (mem_block t label) then
-     Misc.fatal_errorf "Cfg.set_fun_tailrec_entry_point_label: \n\
-                         label %d not found in the cfg" label;
+    Misc.fatal_errorf
+      "Cfg.set_fun_tailrec_entry_point_label: \n\
+       label %d not found in the cfg" label;
   t.fun_tailrec_entry_point_label <- label
 
 let iter_blocks t ~f = Label.Tbl.iter f t.blocks
 
 (* XCR mshinwell: Rename to [can_raise_interproc]?
 
-   gyorsh: removed this function, we don't seem to use it anywhere.
-*)
+   gyorsh: removed this function, we don't seem to use it anywhere. *)
 
 (* Printing for debug *)
 
@@ -155,8 +144,8 @@ let iter_blocks t ~f = Label.Tbl.iter f t.blocks
    because there is no interface to call them. Eventually this won't be
    needed when we change cfg to have its own types rather than referring back
    to mach and cmm. *)
-(* CR-someday gyorsh: implement desc printing, and args/res/dbg, etc, properly, with
-   regs, use the dreaded Format. *)
+(* CR-someday gyorsh: implement desc printing, and args/res/dbg, etc,
+   properly, with regs, use the dreaded Format. *)
 
 let intcomp (comp : Mach.integer_comparison) =
   match comp with
@@ -203,7 +192,6 @@ let print_op oc = function
   | Specific _ -> Printf.fprintf oc "specific"
   | Name_for_debugger _ -> Printf.fprintf oc "name_for_debugger"
 
-
 let print_call oc = function
   | P prim_call -> (
       match prim_call with
@@ -233,30 +221,30 @@ let print_basic oc i =
 let print_terminator oc ?(sep = "\n") ti =
   Printf.fprintf oc "%d: " ti.id;
   match ti.desc with
-  | Branch successors ->
-    (match successors with
-     | Always l ->
-       Printf.fprintf oc "goto %d%s" l sep
-     | Is_even {ifso;ifnot} ->
-       Printf.fprintf oc "if even goto %d%sif odd goto %d%s" ifso sep ifnot sep
-     | Is_true {ifso;ifnot} ->
-       Printf.fprintf oc "if true goto %d%sif false goto %d%s" ifso sep ifnot sep
-     | Float_test {lt;eq;gt;uo} ->
-       Printf.fprintf oc "if < goto %d%s" lt sep;
-       Printf.fprintf oc "if = goto %d%s" eq sep;
-       Printf.fprintf oc "if > goto %d%s" gt sep;
-       Printf.fprintf oc "if uo goto %d%s" uo sep
-     | Int_test {lt;eq;gt;is_signed;imm} ->
-       let cmp = Printf.sprintf " %s%s"
-                   (if is_signed then "s" else "u")
-                   (match imm with
-                    | None -> ""
-                    | Some i -> " "^Int.to_string i)
-       in
-       Printf.fprintf oc "if <%s goto %d%s" cmp lt sep;
-       Printf.fprintf oc "if =%s goto %d%s" cmp eq sep;
-       Printf.fprintf oc "if >%s goto %d%s" cmp gt sep
-    )
+  | Never -> Printf.fprintf oc "deadend%s" sep
+  | Always l -> Printf.fprintf oc "goto %d%s" l sep
+  | Is_even { ifso; ifnot } ->
+      Printf.fprintf oc "if even goto %d%sif odd goto %d%s" ifso sep ifnot
+        sep
+  | Is_true { ifso; ifnot } ->
+      Printf.fprintf oc "if true goto %d%sif false goto %d%s" ifso sep ifnot
+        sep
+  | Float_test { lt; eq; gt; uo } ->
+      Printf.fprintf oc "if < goto %d%s" lt sep;
+      Printf.fprintf oc "if = goto %d%s" eq sep;
+      Printf.fprintf oc "if > goto %d%s" gt sep;
+      Printf.fprintf oc "if uo goto %d%s" uo sep
+  | Int_test { lt; eq; gt; is_signed; imm } ->
+      let cmp =
+        Printf.sprintf " %s%s"
+          (if is_signed then "s" else "u")
+          ( match imm with
+          | None -> ""
+          | Some i -> " " ^ Int.to_string i )
+      in
+      Printf.fprintf oc "if <%s goto %d%s" cmp lt sep;
+      Printf.fprintf oc "if =%s goto %d%s" cmp eq sep;
+      Printf.fprintf oc "if >%s goto %d%s" cmp gt sep
   | Switch labels ->
       Printf.fprintf oc "switch%s" sep;
       for i = 0 to Array.length labels - 1 do

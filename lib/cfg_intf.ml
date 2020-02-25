@@ -91,22 +91,6 @@ module S = struct
       uo : Label.t; (* if x or y are NaN *)
     }
 
-  (** Properties of the representation of successors:
-      - tests of different types are not mixed
-      - total: all possible outcomes of a test have a defined target label
-      - disjoint: at most one of the outcome of a test is true
-      - redundantcy of labels: more than one outcome of test leading
-        to the same label
-      - redundancy of representation of unconditional jump: (Always l)
-        can be simplified to (Is_even {true_=l;false_=l})
-  *)
-  type successors =
-    | Always of Label.t
-    | Is_even of bool_test
-    | Is_true of bool_test
-    | Float_test of float_test
-    | Int_test of int_test
-
   type 'a instruction =
     { desc : 'a;
       arg : Reg.t array;
@@ -125,9 +109,23 @@ module S = struct
     | Poptrap
     | Prologue
 
-  (* CR gyorsh: inline successors definition here instead of branch any more *)
+
+  (** Properties of the representation of successors:
+      - tests of different types are not mixed
+      - total: all possible outcomes of a test have a defined target label
+      - disjoint: at most one of the outcome of a test is true
+      - redundantcy of labels: more than one outcome of test leading
+        to the same label
+      - redundancy of representation of unconditional jump: (Always l)
+        can be simplified to (Is_even {true_=l;false_=l})
+  *)
   type terminator =
-    | Branch of successors
+    | Never
+    | Always of Label.t
+    | Is_even of bool_test
+    | Is_true of bool_test
+    | Float_test of float_test
+    | Int_test of int_test
     | Switch of Label.t array
     | Return
     | Raise of Cmm.raise_kind

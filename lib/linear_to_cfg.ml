@@ -2,31 +2,25 @@
 
 module C = Cfg
 module L = Linear
-module T = Trap_stack.Make(Label)
+module T = Trap_stack.Make (Label)
 
 type t =
   { cfg : Cfg.t;
     mutable layout : Label.t list;
-
     (* Labels added by cfg construction, except entry. Used for testing of
        the mapping back to Linear IR. *)
     mutable new_labels : Label.Set.t;
-
-    (* All traps pushed in this function.
-       Used to check that all trap handler blocks
-       (i.e., blocks that start with LEntertrap in linear),
-       have is_trap_handler set,
-       which is needed to convert them back to linear
+    (* All traps pushed in this function. Used to check that all trap handler
+       blocks (i.e., blocks that start with LEntertrap in linear), have
+       is_trap_handler set, which is needed to convert them back to linear
        (and restore [Lentertrap]). *)
     (* XCR mshinwell: The above comment refers to Entertrap as a CFG
        construction, but it doesn't seem to exist *)
     mutable trap_handlers : Label.Set.t;
-
     (* Maps labels of blocks to trap handler stacks at the beginning of the
-       block.
-       [cfg.block.trap_depth] can be derived from the corresponding
-       trap_stack, except when the block is dead and the trap stack
-       is not known, represented by None. *)
+       block. [cfg.block.trap_depth] can be derived from the corresponding
+       trap_stack, except when the block is dead and the trap stack is not
+       known, represented by None. *)
     (* CR-soon gyorsh: The need for this is because we need to record
        trap_stack for a block that hasn't been created yet. If we change
        create_empty_block to get_or_create, then we don't need this hashtbl
@@ -34,23 +28,19 @@ type t =
        but it is a major restructuring of create_blocks, which won't be
        needed when we split blocks to have only one stack each. *)
     trap_stacks : T.t Label.Tbl.t;
-
-    (* Maps labels to trap stacks at the raise points in the block.
-       CR-soon gyorsh: this won't be needed after block splitting,
-       as it will be uniquely determined by the top of the trap stack. *)
+    (* Maps labels to trap stacks at the raise points in the block. CR-soon
+       gyorsh: this won't be needed after block splitting, as it will be
+       uniquely determined by the top of the trap stack. *)
     exns : T.t list Label.Tbl.t;
-
     interproc_handler : Label.t;
-    (* A fake label that represents the top of the trap stack on
-       entry to this function. *)
-
-    mutable unresolved_traps_to_pop : T.t list;
-    (* Collect trap stacks from [exns] that need to be propagated
-       to the exns successors of a block, but cannot be propagated yet,
-       because the top of these trap stacks is unresolved
-       (i.e., the exns successor block is not known).
-       These trap stacks will become resolved unless they are unreachable.
-    *)
+    (* A fake label that represents the top of the trap stack on entry to
+       this function. *)
+    mutable unresolved_traps_to_pop : T.t list
+        (* Collect trap stacks from [exns] that need to be propagated to the
+           exns successors of a block, but cannot be propagated yet, because
+           the top of these trap stacks is unresolved (i.e., the exns
+           successor block is not known). These trap stacks will become
+           resolved unless they are unreachable. *)
   }
 
 let create cfg =
@@ -60,8 +50,8 @@ let create cfg =
     trap_handlers = Label.Set.empty;
     trap_stacks = Label.Tbl.create 31;
     exns = Label.Tbl.create 31;
-    interproc_handler = (-1);
-    unresolved_traps_to_pop = [];
+    interproc_handler = -1;
+    unresolved_traps_to_pop = []
   }
 
 (* CR-soon gyorsh: implement CFG traversal *)
@@ -116,20 +106,19 @@ let resolve_traps_to_pop t ls =
   let rec loop prev =
     let progress = ref false in
     let curr =
-      List.fold_left (fun acc traps ->
-        match T.top_exn traps with
-        | None -> Misc.fatal_errorf "resolve_traps_to_pop: Illegal trap stack"
-        | Some top ->
-          progress := true;
-          record_traps t top (T.pop traps);
-          acc
-        | exception T.Unresolved ->
-          traps::acc)
-        []
-        prev
+      List.fold_left
+        (fun acc traps ->
+          match T.top_exn traps with
+          | None ->
+              Misc.fatal_errorf "resolve_traps_to_pop: Illegal trap stack"
+          | Some top ->
+              progress := true;
+              record_traps t top (T.pop traps);
+              acc
+          | exception T.Unresolved -> traps :: acc)
+        [] prev
     in
-    if !progress then loop curr
-    else curr
+    if !progress then loop curr else curr
   in
   loop ls
 
@@ -160,7 +149,7 @@ let create_empty_block t start ~trap_depth ~traps =
       is_trap_handler = false;
       can_raise = false;
       can_raise_interproc = false;
-      dead = false;
+      dead = false
     }
   in
   record_traps t start traps;
@@ -181,41 +170,36 @@ let register_block t (block : C.basic_block) traps =
   Label.Set.iter
     (fun label -> record_traps t label traps)
     (C.successor_labels t.cfg ~normal:true ~exn:false block);
-  (* XCR mshinwell: do we need to update traps of exns successors? what do we put
-     there? we probably need to pop traps before propagating to the handler,
-     but can it be unified at the handler? is it not the whole point that a
-     handler can be reached with different trap stacks dynamically? Should it
-     be a union stacks rather than unify them? Then, we need set of stacks
-     everywhere and how do we unify two sets?
-     As discussed:
-     - think about and/or update comment re. first sentence
-     - unique trap depth per handler. *)
 
-  (* Update trap stacks of exns successors.
-     For each trap stack [s] in exn:
-     The handler is the block identified by the label on the top of [s].
-     The trap stack of the handler must be the same as (pop [s]).
-     The difficulty is that at this point the top of [s] might be unknown.
-     Such trap stacks are recorded and resolved at the end of the pass.
-  *)
-  (match Label.Tbl.find_opt t.exns block.start with
-   | None -> ()
-   | Some ls ->
-     t.unresolved_traps_to_pop <-
-       (resolve_traps_to_pop t ls) @ t.unresolved_traps_to_pop);
+  (* XCR mshinwell: do we need to update traps of exns successors? what do we
+     put there? we probably need to pop traps before propagating to the
+     handler, but can it be unified at the handler? is it not the whole point
+     that a handler can be reached with different trap stacks dynamically?
+     Should it be a union stacks rather than unify them? Then, we need set of
+     stacks everywhere and how do we unify two sets? As discussed: - think
+     about and/or update comment re. first sentence - unique trap depth per
+     handler. *)
+
+  (* Update trap stacks of exns successors. For each trap stack [s] in exn:
+     The handler is the block identified by the label on the top of [s]. The
+     trap stack of the handler must be the same as (pop [s]). The difficulty
+     is that at this point the top of [s] might be unknown. Such trap stacks
+     are recorded and resolved at the end of the pass. *)
+  ( match Label.Tbl.find_opt t.exns block.start with
+  | None -> ()
+  | Some ls ->
+      t.unresolved_traps_to_pop <-
+        resolve_traps_to_pop t ls @ t.unresolved_traps_to_pop );
 
   Label.Tbl.add t.cfg.blocks block.start block
 
-(* XCR gyorsh:
-   This is not needed any more. Mach.operation_can_raise is used instead.
-   Remove after CRs inside are resolved.
-*)
+(* XCR gyorsh: This is not needed any more. Mach.operation_can_raise is used
+   instead. Remove after CRs inside are resolved. *)
 let _can_raise_basic (i : C.basic) =
-  (* XCR mshinwell: Make match exhaustive
-     In fact, I would try enabling warning 4 everywhere (just remove it
-     from the @@@ocaml.warning stanza at the top of each file), to catch
-     more of these cases.  Warning 4 can be overkill sometimes but for this
-     library it's probably ok. *)
+  (* XCR mshinwell: Make match exhaustive In fact, I would try enabling
+     warning 4 everywhere (just remove it from the @@@ocaml.warning stanza at
+     the top of each file), to catch more of these cases. Warning 4 can be
+     overkill sometimes but for this library it's probably ok. *)
   match i with
   | Call _ -> true
   | Op _ -> false
@@ -224,36 +208,39 @@ let _can_raise_basic (i : C.basic) =
 let can_raise_terminator (i : C.terminator) =
   (* XCR mshinwell: Make match exhaustive *)
   match i with
-  | Raise _ | Tailcall (Func _) ->
-     true
-  | Branch _ | Switch _ | Return | Tailcall (Self _)-> false
+  | Raise _ | Tailcall (Func _) -> true
+  | Never | Always _ | Is_even _ | Is_true _ | Float_test _ | Int_test _
+  | Switch _ | Return
+  | Tailcall (Self _) ->
+      false
 
 let check_traps t label (block : C.basic_block) =
   match Label.Tbl.find_opt t.trap_stacks label with
   | None -> ()
-  | Some trap_stack_at_start ->
-    if !C.verbose then (
-      Printf.printf "%s: check_trap at %d: " t.cfg.fun_name label;
-      T.print trap_stack_at_start );
-    match T.to_list_exn trap_stack_at_start with
-    | trap_labels ->
-      if (List.compare_length_with trap_labels block.trap_depth) <> 0 then
-        Misc.fatal_errorf
-          "Malformed linear IR: mismatch trap_depth=%d, \
-           but trap_stack_at_start length=%d"
-          block.trap_depth (List.length trap_labels);
-    | exception T.Unresolved ->
-      (* At the end of the cfg construction, some blocks may have
-         unresolved trap stacks. All these blocks must be dead, i.e., unreachable from
-         entry of the function.  This check can done as a separate pass in dead block
-         elimination. Here we need keep track of blocks with unresolved trap_stacks,
-         because t.trap_stacks is not available after cfg construction.  *)
-      block.dead <- true;
-      if !C.verbose then
-        Printf.printf
-          "unknown trap stack at label %d, the block must be dead, or \
-           there is a bug in trap stacks."
-          label
+  | Some trap_stack_at_start -> (
+      if !C.verbose then (
+        Printf.printf "%s: check_trap at %d: " t.cfg.fun_name label;
+        T.print trap_stack_at_start );
+      match T.to_list_exn trap_stack_at_start with
+      | trap_labels ->
+          if List.compare_length_with trap_labels block.trap_depth <> 0 then
+            Misc.fatal_errorf
+              "Malformed linear IR: mismatch trap_depth=%d, but \
+               trap_stack_at_start length=%d"
+              block.trap_depth (List.length trap_labels)
+      | exception T.Unresolved ->
+          (* At the end of the cfg construction, some blocks may have
+             unresolved trap stacks. All these blocks must be dead, i.e.,
+             unreachable from entry of the function. This check can done as a
+             separate pass in dead block elimination. Here we need keep track
+             of blocks with unresolved trap_stacks, because t.trap_stacks is
+             not available after cfg construction. *)
+          block.dead <- true;
+          if !C.verbose then
+            Printf.printf
+              "unknown trap stack at label %d, the block must be dead, or \
+               there is a bug in trap stacks."
+              label )
 
 (* XCR mshinwell: This function should be renamed, since it sounds like an
    invariant-checking function at the moment, but actually updates
@@ -261,57 +248,53 @@ let check_traps t label (block : C.basic_block) =
 
    gyorsh: renamed and split into check_traps and register_exns *)
 let register_exns t label (block : C.basic_block) =
-  (* All exns in this block must be based off the trap_stack_at_start,
-     which must have been successfully resolved by T.unify,
-     i.e., does not contain any Unknown frames or labels. *)
+  (* All exns in this block must be based off the trap_stack_at_start, which
+     must have been successfully resolved by T.unify, i.e., does not contain
+     any Unknown frames or labels. *)
   (* XCR mshinwell: Clarify what "resolved" means *)
   match Label.Tbl.find_opt t.exns label with
   | None -> ()
   | Some exns ->
-    let f acc trap_stack =
-      (* XCR mshinwell: We can check something about
-         [block.trap_depth] based on the return value from
-         [T.top_exn], no?
+      let f acc trap_stack =
+        (* XCR mshinwell: We can check something about [block.trap_depth]
+           based on the return value from [T.top_exn], no?
 
-         gyorsh: there is check just above which compares
-         the depth of trap_stack_at_start to trap_depth
-         which is also for the start of the block.
-         Below [T.top_exn trap_stack] returns a trap
-         stack at some point during the block, which can be
-         either deeper or shallower than the trap_stack_at_entry,
-         because a block can contain pushtrap and poptrap.
-      *)
-      (* XCR mshinwell: Call this variable [trap_stack] or something
-         rather than [l]. *)
-      match T.top_exn trap_stack with
-      | None ->
-        Misc.fatal_errorf "register_exns: empty trap stack for %d" label
-      | Some l ->
-        if Label.equal l t.interproc_handler then
-          (block.can_raise_interproc <- true; acc)
-        else
-          (Label.Set.add l acc)
-      | exception T.Unresolved ->
-        (* must be dead block or flow from exception handler only *)
-        assert block.dead;
-        if !C.verbose then
-          Printf.printf
-            "unknown trap stack in exns of block %d: \
-             the block must be dead, or \
-             there is a bug in trap stacks."
-            label;
-        acc
-    in
-    block.exns <- List.fold_left f Label.Set.empty exns;
-    if !C.verbose then (
-      Printf.printf "%s: %d exn stacks at %d: " t.cfg.fun_name
-        (List.length exns) label;
-      List.iter T.print exns;
-      Printf.printf "%s: %d exns at %d: " t.cfg.fun_name
-        (Label.Set.cardinal block.exns)
-        label;
-      Label.Set.iter (Printf.printf "%d ") block.exns;
-      Printf.printf "\n" )
+           gyorsh: there is check just above which compares the depth of
+           trap_stack_at_start to trap_depth which is also for the start of
+           the block. Below [T.top_exn trap_stack] returns a trap stack at
+           some point during the block, which can be either deeper or
+           shallower than the trap_stack_at_entry, because a block can
+           contain pushtrap and poptrap. *)
+        (* XCR mshinwell: Call this variable [trap_stack] or something rather
+           than [l]. *)
+        match T.top_exn trap_stack with
+        | None ->
+            Misc.fatal_errorf "register_exns: empty trap stack for %d" label
+        | Some l ->
+            if Label.equal l t.interproc_handler then (
+              block.can_raise_interproc <- true;
+              acc )
+            else Label.Set.add l acc
+        | exception T.Unresolved ->
+            (* must be dead block or flow from exception handler only *)
+            assert block.dead;
+            if !C.verbose then
+              Printf.printf
+                "unknown trap stack in exns of block %d: the block must be \
+                 dead, or there is a bug in trap stacks."
+                label;
+            acc
+      in
+      block.exns <- List.fold_left f Label.Set.empty exns;
+      if !C.verbose then (
+        Printf.printf "%s: %d exn stacks at %d: " t.cfg.fun_name
+          (List.length exns) label;
+        List.iter T.print exns;
+        Printf.printf "%s: %d exns at %d: " t.cfg.fun_name
+          (Label.Set.cardinal block.exns)
+          label;
+        Label.Set.iter (Printf.printf "%d ") block.exns;
+        Printf.printf "\n" )
 
 let check_and_register_traps t =
   (* check that all blocks referred to in pushtraps are marked as
@@ -321,14 +304,16 @@ let check_and_register_traps t =
       let trap_block = C.get_block_exn t.cfg label in
       (* XCR mshinwell: This again references the mythical Entertrap *)
       if not trap_block.is_trap_handler then
-        Misc.fatal_errorf "Label %d used as a handler in Lpushtrap, \
-                           but the block at %d does not start
-                           with an Lentertrap instruction."
-          label label)
+        Misc.fatal_errorf
+          "Label %d used as a handler in Lpushtrap, but the block at %d \
+           does not start\n\
+          \                           with an Lentertrap instruction." label
+          label)
     t.trap_handlers;
 
   (* propagate remaining trap stacks to handlers *)
-  t.unresolved_traps_to_pop <- resolve_traps_to_pop t t.unresolved_traps_to_pop;
+  t.unresolved_traps_to_pop <-
+    resolve_traps_to_pop t t.unresolved_traps_to_pop;
   if List.compare_length_with t.unresolved_traps_to_pop 0 > 0 then
     if !C.verbose then
       Printf.printf "%d" (List.length t.unresolved_traps_to_pop);
@@ -365,19 +350,9 @@ let get_or_make_label t (insn : Linear.instruction) :
   match insn.desc with
   | Llabel label -> { label; insn }
   | Lend -> Misc.fatal_error "Unexpected end of function instead of label"
-  | Lprologue
-  | Lop _
-  | Lreloadretaddr
-  | Lreturn
-  | Lbranch _
-  | Lcondbranch _
-  | Lcondbranch3 _
-  | Lswitch _
-  | Lentertrap
-  | Ladjust_trap_depth _
-  | Lpushtrap _
-  | Lpoptrap
-  | Lraise _ ->
+  | Lprologue | Lop _ | Lreloadretaddr | Lreturn | Lbranch _
+  | Lcondbranch _ | Lcondbranch3 _ | Lswitch _ | Lentertrap
+  | Ladjust_trap_depth _ | Lpushtrap _ | Lpoptrap | Lraise _ ->
       let label = Cmm.new_label () in
       t.new_labels <- Label.Set.add label t.new_labels;
       let insn = Linear.instr_cons (Llabel label) [||] [||] insn in
@@ -397,16 +372,16 @@ let of_cmm_float_test ~lbl ~inv (cmp : Cmm.float_comparison) : C.float_test =
   | CFnge -> { eq = inv; lt = lbl; gt = inv; uo = lbl }
 
 let of_cmm_int_test ~lbl ~inv ~is_signed ~imm (cmp : Cmm.integer_comparison)
-  : C.int_test =
+    : C.int_test =
   match cmp with
-  | Ceq -> { eq = lbl; lt = inv; gt = inv; is_signed; imm; }
-  | Clt -> { eq = inv; lt = lbl; gt = inv; is_signed; imm; }
-  | Cgt -> { eq = inv; lt = inv; gt = lbl; is_signed; imm; }
-  | Cne -> { eq = inv; lt = lbl; gt = lbl; is_signed; imm; }
-  | Cle -> { eq = lbl; lt = lbl; gt = inv; is_signed; imm; }
-  | Cge -> { eq = lbl; lt = inv; gt = lbl; is_signed; imm; }
+  | Ceq -> { eq = lbl; lt = inv; gt = inv; is_signed; imm }
+  | Clt -> { eq = inv; lt = lbl; gt = inv; is_signed; imm }
+  | Cgt -> { eq = inv; lt = inv; gt = lbl; is_signed; imm }
+  | Cne -> { eq = inv; lt = lbl; gt = lbl; is_signed; imm }
+  | Cle -> { eq = lbl; lt = lbl; gt = inv; is_signed; imm }
+  | Cge -> { eq = lbl; lt = inv; gt = lbl; is_signed; imm }
 
-let mk_int_test ~lbl ~inv ~imm (cmp:Mach.integer_comparison) : C.int_test =
+let mk_int_test ~lbl ~inv ~imm (cmp : Mach.integer_comparison) : C.int_test =
   match cmp with
   | Isigned cmp -> of_cmm_int_test ~lbl ~inv cmp ~is_signed:true ~imm
   | Iunsigned cmp -> of_cmm_int_test ~lbl ~inv cmp ~is_signed:false ~imm
@@ -415,16 +390,17 @@ let block_is_registered t (block : C.basic_block) =
   Label.Tbl.mem t.cfg.blocks block.start
 
 let add_terminator t (block : C.basic_block) (i : L.instruction)
-      (desc : C.terminator) ~trap_depth ~traps =
-    (* All terminators are followed by a label, except branches we created for
-       fallthroughs in Linear. *)
-    (* CR gyorsh for mshinwell: you asked in the previous review round:
-       "What exactly determines which ones of these must be followed by a label?"
-       and I put in the comment above, but then you removed the case for Branch,
-       I think, not sure why, and it is needed. I am putting it back. *)
+    (desc : C.terminator) ~trap_depth ~traps =
+  (* All terminators are followed by a label, except branches we created for
+     fallthroughs in Linear. *)
+  (* CR gyorsh for mshinwell: you asked in the previous review round: "What
+     exactly determines which ones of these must be followed by a label?" and
+     I put in the comment above, but then you removed the case for Branch, I
+     think, not sure why, and it is needed. I am putting it back. *)
   ( match desc with
-    | Branch _ -> ()
-    | Switch _ | Return | Raise _ | Tailcall _ ->
+  | Never -> Misc.fatal_error "Cannot add terminator: Never"
+  | Always _ | Is_even _ | Is_true _ | Float_test _ | Int_test _ -> ()
+  | Switch _ | Return | Raise _ | Tailcall _ ->
       if not (Linear_utils.defines_label i.next) then
         Misc.fatal_errorf "Linear instruction not followed by label:@ %a"
           Printlinear.instr
@@ -433,42 +409,34 @@ let add_terminator t (block : C.basic_block) (i : L.instruction)
   if can_raise_terminator desc then record_exn t block traps;
   register_block t block traps
 
-
 let to_basic (mop : Mach.operation) : C.basic =
   match mop with
-  | Icall_ind { label_after } ->
-    Call (F (Indirect { label_after }))
+  | Icall_ind { label_after } -> Call (F (Indirect { label_after }))
   | Icall_imm { func; label_after } ->
-    Call (F (Direct { func_symbol = func; label_after }))
+      Call (F (Direct { func_symbol = func; label_after }))
   | Iextcall { func; alloc; label_after } ->
-    Call
-      (P (External { func_symbol = func; alloc; label_after }))
+      Call (P (External { func_symbol = func; alloc; label_after }))
   | Iintop (Icheckbound { label_after_error; spacetime_index }) ->
-    Call
-      (P
-         (Checkbound
-            { immediate = None;
-              label_after_error;
-              spacetime_index
-            }))
-  | Iintop (( Iadd | Isub | Imul | Imulh | Idiv | Imod
-            | Iand | Ior | Ixor | Ilsl | Ilsr | Iasr | Icomp _
-            ) as op) -> Op (Intop op)
+      Call
+        (P
+           (Checkbound
+              { immediate = None; label_after_error; spacetime_index }))
+  | Iintop
+      ( ( Iadd | Isub | Imul | Imulh | Idiv | Imod | Iand | Ior | Ixor | Ilsl
+        | Ilsr | Iasr | Icomp _ ) as op ) ->
+      Op (Intop op)
+  | Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i) ->
+      Call
+        (P
+           (Checkbound
+              { immediate = Some i; label_after_error; spacetime_index }))
   | Iintop_imm
-      (Icheckbound { label_after_error; spacetime_index }, i) ->
-    Call
-      (P
-         (Checkbound
-            { immediate = Some i;
-              label_after_error;
-              spacetime_index
-            }))
-  | Iintop_imm (( Iadd | Isub | Imul | Imulh | Idiv | Imod
-                | Iand | Ior | Ixor | Ilsl | Ilsr | Iasr | Icomp _
-                ) as op, i) -> Op (Intop_imm (op, i))
+      ( ( ( Iadd | Isub | Imul | Imulh | Idiv | Imod | Iand | Ior | Ixor
+          | Ilsl | Ilsr | Iasr | Icomp _ ) as op ),
+        i ) ->
+      Op (Intop_imm (op, i))
   | Ialloc { bytes; label_after_call_gc; spacetime_index } ->
-    Call
-      (P (Alloc { bytes; label_after_call_gc; spacetime_index }))
+      Call (P (Alloc { bytes; label_after_call_gc; spacetime_index }))
   | Istackoffset i -> Op (Stackoffset i)
   | Iload (c, a) -> Op (Load (c, a))
   | Istore (c, a, b) -> Op (Store (c, a, b))
@@ -487,11 +455,11 @@ let to_basic (mop : Mach.operation) : C.basic =
   | Ifloatofint -> Op Floatofint
   | Iintoffloat -> Op Intoffloat
   | Ispecific op -> Op (Specific op)
-  | Iname_for_debugger
-      { ident; which_parameter; provenance; is_assignment } ->
-    Op
-      (Name_for_debugger
-         { ident; which_parameter; provenance; is_assignment })
+  | Iname_for_debugger { ident; which_parameter; provenance; is_assignment }
+    ->
+      Op
+        (Name_for_debugger
+           { ident; which_parameter; provenance; is_assignment })
   | Itailcall_ind _ | Itailcall_imm _ -> assert false
 
 (** [traps] represents the trap stack, with head being the top. [trap_depths]
@@ -507,20 +475,20 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
         Misc.fatal_errorf "End of function without terminator for block %d"
           block.start
   | Llabel start ->
-    (*   Not all labels need to start a new block.
-         Keep the translation from linear to cfg simple, and
-         optimize (remove/merge blocks) in a separate pass, because:
-         - correctness of linear to cfg and back is easier to reason about.
-         - the optimizations are easier to implement and reason about on the CFG.
-         - some optimization opportunities cannot be identified in a single pass
-           on the Linear IR, during cfg construction.
-         - optimizations can be enabled by the client of the library whenever needed *)
+      (* Not all labels need to start a new block. Keep the translation from
+         linear to cfg simple, and optimize (remove/merge blocks) in a
+         separate pass, because: - correctness of linear to cfg and back is
+         easier to reason about. - the optimizations are easier to implement
+         and reason about on the CFG. - some optimization opportunities
+         cannot be identified in a single pass on the Linear IR, during cfg
+         construction. - optimizations can be enabled by the client of the
+         library whenever needed *)
       if !C.verbose then
         Printf.printf "Llabel start=%d, block.start=%d\n" start block.start;
       (* Labels always cause a new block to be created. If the block prior to
          the label falls through, an explicit successor edge is added. *)
       if not (block_is_registered t block) then (
-        let fallthrough : C.terminator = Branch (Always start) in
+        let fallthrough : C.terminator = Always start in
         block.terminator <- create_instruction fallthrough i ~trap_depth;
         register_block t block traps );
       (* CR-soon gyorsh: check for multiple consecutive labels *)
@@ -528,57 +496,57 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       create_blocks t i.next new_block ~trap_depth ~traps
   | Lreturn ->
       if trap_depth <> 1 then
-        Misc.fatal_errorf "Trap depth is %d, but it must be 0 at Lreturn" trap_depth;
+        Misc.fatal_errorf "Trap depth is %d, but it must be 0 at Lreturn"
+          trap_depth;
       add_terminator t block i Return ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lraise kind ->
-    (* CR-soon gyorsh: Why does the compiler not generate adjust after
-       raise? raise pops the trap handler stack and then the next block may
-       have a different try depth. Also, why do we not need to update
-       trap_depths and traps here like for pop?
+      (* CR-soon gyorsh: Why does the compiler not generate adjust after
+         raise? raise pops the trap handler stack and then the next block may
+         have a different try depth. Also, why do we not need to update
+         trap_depths and traps here like for pop?
 
-       XCR mshinwell: I don't think there's anything special about a raise for
-       Linearize; it may still add a trap adjustment.  Think about this some
-       more...
+         XCR mshinwell: I don't think there's anything special about a raise
+         for Linearize; it may still add a trap adjustment. Think about this
+         some more...
 
-       gyorsh: it is now handled in register_block called from add_terminator.
-    *)
-    add_terminator t block i (Raise kind) ~trap_depth ~traps;
-    create_blocks t i.next block ~trap_depth ~traps
+         gyorsh: it is now handled in register_block called from
+         add_terminator. *)
+      add_terminator t block i (Raise kind) ~trap_depth ~traps;
+      create_blocks t i.next block ~trap_depth ~traps
   | Lbranch lbl ->
       if !C.verbose then Printf.printf "Lbranch %d\n" lbl;
-      add_terminator t block i (Branch (Always lbl)) ~trap_depth ~traps;
+      add_terminator t block i (Always lbl) ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lcondbranch (cond, lbl) ->
-    (* This representation does not preserve the order of successors. *)
-    let fallthrough = get_or_make_label t i.next in
-    let inv = fallthrough.label in
-    let successors : C.successors =
-      match (cond:Mach.test) with
-      | Ieventest -> Is_even {ifso = lbl; ifnot = inv}
-      | Ioddtest -> Is_even {ifso = inv; ifnot = lbl }
-      | Itruetest -> Is_true {ifso = lbl; ifnot = inv}
-      | Ifalsetest -> Is_true {ifso = inv; ifnot = lbl }
-      | Ifloattest cmp -> Float_test (of_cmm_float_test cmp ~lbl ~inv)
-      | Iinttest cmp -> Int_test (mk_int_test cmp ~lbl ~inv ~imm:None)
-      | Iinttest_imm (cmp,n) ->
-        Int_test (mk_int_test cmp ~lbl ~inv ~imm:(Some n))
-    in
-    add_terminator t block i (Branch successors) ~trap_depth ~traps;
-    create_blocks t fallthrough.insn block ~trap_depth ~traps
+      (* This representation does not preserve the order of successors. *)
+      let fallthrough = get_or_make_label t i.next in
+      let inv = fallthrough.label in
+      let desc : C.terminator =
+        match (cond : Mach.test) with
+        | Ieventest -> Is_even { ifso = lbl; ifnot = inv }
+        | Ioddtest -> Is_even { ifso = inv; ifnot = lbl }
+        | Itruetest -> Is_true { ifso = lbl; ifnot = inv }
+        | Ifalsetest -> Is_true { ifso = inv; ifnot = lbl }
+        | Ifloattest cmp -> Float_test (of_cmm_float_test cmp ~lbl ~inv)
+        | Iinttest cmp -> Int_test (mk_int_test cmp ~lbl ~inv ~imm:None)
+        | Iinttest_imm (cmp, n) ->
+            Int_test (mk_int_test cmp ~lbl ~inv ~imm:(Some n))
+      in
+      add_terminator t block i desc ~trap_depth ~traps;
+      create_blocks t fallthrough.insn block ~trap_depth ~traps
   | Lcondbranch3 (lbl0, lbl1, lbl2) ->
       let fallthrough = get_or_make_label t i.next in
       let get_dest lbl = Option.value lbl ~default:fallthrough.label in
       let it : C.int_test =
-        {
-          imm = Some 1;
+        { imm = Some 1;
           is_signed = false;
           lt = get_dest lbl0;
           eq = get_dest lbl1;
-          gt = get_dest lbl2;
+          gt = get_dest lbl2
         }
       in
-      add_terminator t block i (Branch (Int_test it)) ~trap_depth ~traps;
+      add_terminator t block i (Int_test it) ~trap_depth ~traps;
       create_blocks t fallthrough.insn block ~trap_depth ~traps
   | Lswitch labels ->
       (* CR-soon gyorsh: get rid of switches entirely and re-generate them
@@ -623,7 +591,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       create_blocks t i.next block ~trap_depth ~traps
   | Lentertrap ->
       (* Must be the first instruction in the block. *)
-      assert ((List.compare_length_with block.body 0) = 0);
+      assert (List.compare_length_with block.body 0 = 0);
       block.is_trap_handler <- true;
       create_blocks t i.next block ~trap_depth ~traps
   | Lprologue ->
@@ -634,28 +602,33 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       let desc = C.Reloadretaddr in
       block.body <- create_instruction desc i ~trap_depth :: block.body;
       create_blocks t i.next block ~trap_depth ~traps
-  | Lop mop ->
+  | Lop mop -> (
       match mop with
       | Itailcall_ind { label_after } ->
-        let desc = C.Tailcall (Func (Indirect { label_after })) in
-        add_terminator t block i desc ~trap_depth ~traps;
-        create_blocks t i.next block ~trap_depth ~traps
+          let desc = C.Tailcall (Func (Indirect { label_after })) in
+          add_terminator t block i desc ~trap_depth ~traps;
+          create_blocks t i.next block ~trap_depth ~traps
       | Itailcall_imm { func = func_symbol; label_after } ->
-        let desc =
-          if String.equal func_symbol (C.fun_name t.cfg) then
-            C.Tailcall (Self { label_after })
-          else C.Tailcall (Func (Direct { func_symbol; label_after }))
-        in
-        add_terminator t block i desc ~trap_depth ~traps;
-        create_blocks t i.next block ~trap_depth ~traps
-      | (Imove|Ispill|Ireload|Inegf|Iabsf|Iaddf|Isubf|Imulf|Idivf|Ifloatofint|
-         Iintoffloat|Iconst_int _|Iconst_float _|Iconst_symbol _|Icall_ind _|
-         Icall_imm _|Iextcall _|Istackoffset _|Iload (_, _)|Istore (_, _, _)|Ialloc _|
-         Iintop _|Iintop_imm (_, _)|Ispecific _|Iname_for_debugger _) ->
-        let desc = to_basic mop in
-        block.body <- create_instruction desc i ~trap_depth :: block.body;
-        if Mach.operation_can_raise mop then record_exn t block traps;
-        create_blocks t i.next block ~trap_depth ~traps
+          let desc =
+            if String.equal func_symbol (C.fun_name t.cfg) then
+              C.Tailcall (Self { label_after })
+            else C.Tailcall (Func (Direct { func_symbol; label_after }))
+          in
+          add_terminator t block i desc ~trap_depth ~traps;
+          create_blocks t i.next block ~trap_depth ~traps
+      | Imove | Ispill | Ireload | Inegf | Iabsf | Iaddf | Isubf | Imulf
+      | Idivf | Ifloatofint | Iintoffloat | Iconst_int _ | Iconst_float _
+      | Iconst_symbol _ | Icall_ind _ | Icall_imm _ | Iextcall _
+      | Istackoffset _
+      | Iload (_, _)
+      | Istore (_, _, _)
+      | Ialloc _ | Iintop _
+      | Iintop_imm (_, _)
+      | Ispecific _ | Iname_for_debugger _ ->
+          let desc = to_basic mop in
+          block.body <- create_instruction desc i ~trap_depth :: block.body;
+          if Mach.operation_can_raise mop then record_exn t block traps;
+          create_blocks t i.next block ~trap_depth ~traps )
 
 let run (f : Linear.fundecl) ~preserve_orig_labels =
   let t =

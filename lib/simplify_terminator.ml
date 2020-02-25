@@ -1,4 +1,5 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
+
 module C = Cfg
 
 (* Convert simple [Switch] to branches. *)
@@ -10,72 +11,63 @@ let simplify_switch (block : C.basic_block) labels =
   let labels_with_counts =
     Array.fold_right
       (fun l acc ->
-         if (List.compare_length_with acc 3) > 0 then acc
-         else match acc with
-           | [] -> [(l,1)]
-           | (hd,n)::tl -> if Label.equal hd l then (hd,n+1)::tl else (l,1)::acc
-      )
-      labels
-      []
+        if List.compare_length_with acc 3 > 0 then acc
+        else
+          match acc with
+          | [] -> [(l, 1)]
+          | (hd, n) :: tl ->
+              if Label.equal hd l then (hd, n + 1) :: tl else (l, 1) :: acc)
+      labels []
   in
   match labels_with_counts with
-  | [(l,_)] ->
-    (* All labels are the same and equal to l *)
-    block.terminator <- { block.terminator with desc = Branch (Always l) }
-  | [(l0,n);(ln,k)] ->
-    assert (Label.equal labels.(0) l0);
-    assert (Label.equal labels.(n) ln);
-    assert (len = n+k);
-    let successors = C.Int_test
-                       {
-                         is_signed = false;
-                         imm = Some n;
-                         lt = l0;
-                         eq = ln;
-                         gt = ln;
-                       }
-    in
-    block.terminator <- { block.terminator with desc = Branch successors }
-  | [(l0,1);(l1,1);(l2,n)] ->
-    assert (Label.equal labels.(0) l0);
-    assert (Label.equal labels.(1) l1);
-    assert (Label.equal labels.(2) l2);
-    assert (len = n+2);
-    let successors = C.Int_test
-                       {
-                         is_signed = false;
-                         imm = Some 1;
-                         lt = l0;
-                         eq = l1;
-                         gt = l2
-                       }
-    in
-    block.terminator <- { block.terminator with desc = Branch successors}
+  | [(l, _)] ->
+      (* All labels are the same and equal to l *)
+      block.terminator <- { block.terminator with desc = Always l }
+  | [(l0, n); (ln, k)] ->
+      assert (Label.equal labels.(0) l0);
+      assert (Label.equal labels.(n) ln);
+      assert (len = n + k);
+      let desc =
+        C.Int_test
+          { is_signed = false; imm = Some n; lt = l0; eq = ln; gt = ln }
+      in
+      block.terminator <- { block.terminator with desc }
+  | [(l0, 1); (l1, 1); (l2, n)] ->
+      assert (Label.equal labels.(0) l0);
+      assert (Label.equal labels.(1) l1);
+      assert (Label.equal labels.(2) l2);
+      assert (len = n + 2);
+      let desc =
+        C.Int_test
+          { is_signed = false; imm = Some 1; lt = l0; eq = l1; gt = l2 }
+      in
+      block.terminator <- { block.terminator with desc }
   | _ -> ()
 
 (* CR-soon gyorsh: merge (Lbranch | Lcondbranch | Lcondbranch3)+ into a
-   single terminator when the argments are the same. Enables reordering
-   of branch instructions and save cmp instructions. The main problem
-   is that it involves boolean combination of conditionals of type
-   Mach.test that can arise from a sequence of branches. When all
-   conditions in the combination are integer comparisons, we can
-   simplify them into a single condition, but it doesn't work for
-   Ieventest and Ioddtest (which come from the primitive "is integer").
-   The advantage is that it will enable us to reorder branch
-   instructions to avoid generating jmp to fallthrough location in the
-   new order. Also, for linear to cfg and back will be harder to
-   generate exactly the same layout. Also, how do we map execution
-   counts about branches onto this terminator? *)
+   single terminator when the argments are the same. Enables reordering of
+   branch instructions and save cmp instructions. The main problem is that it
+   involves boolean combination of conditionals of type Mach.test that can
+   arise from a sequence of branches. When all conditions in the combination
+   are integer comparisons, we can simplify them into a single condition, but
+   it doesn't work for Ieventest and Ioddtest (which come from the primitive
+   "is integer"). The advantage is that it will enable us to reorder branch
+   instructions to avoid generating jmp to fallthrough location in the new
+   order. Also, for linear to cfg and back will be harder to generate exactly
+   the same layout. Also, how do we map execution counts about branches onto
+   this terminator? *)
 let block cfg (block : C.basic_block) =
   match block.terminator.desc with
-  | Branch (Always _) -> ()
-  | Branch (Is_even _ | Is_true _ | Int_test _ | Float_test _) ->
+  | Always _ -> ()
+  | Never ->
+      Misc.fatal_errorf "Cannot simplify terminator: Never (in block %d)"
+        block.start
+  | Is_even _ | Is_true _ | Int_test _ | Float_test _ ->
       let labels = C.successor_labels cfg ~normal:true ~exn:false block in
-      if Label.Set.cardinal labels = 1 then (
+      if Label.Set.cardinal labels = 1 then
         let l = Label.Set.min_elt labels in
-        block.terminator <- { block.terminator with desc = Branch (Always l) }
-      )
+        block.terminator <- { block.terminator with desc = Always l }
   | Switch labels -> simplify_switch block labels
-  | Tailcall (Self _ | Func _) | Raise _ | Return  -> ()
+  | Tailcall (Self _ | Func _) | Raise _ | Return -> ()
 
 let run cfg = C.iter_blocks cfg ~f:(fun _ b -> block cfg b)
