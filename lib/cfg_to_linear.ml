@@ -199,7 +199,7 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
                  some cases its condition is not disjoint. *)
               if Label.Set.mem uo target_labels then
                 ( emit ~is_last:true uo @ init,
-                  Label.Set.remove uo successor_labels )
+                  Label.Set.remove uo target_labels )
               else (init, target_labels)
             in
             Label.Set.fold
