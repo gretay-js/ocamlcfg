@@ -21,10 +21,14 @@ let new_labels t = t.new_labels
 let set_layout t layout =
   let cur_layout = Label.Set.of_list t.layout in
   let new_layout = Label.Set.of_list layout in
-  if not (Label.Set.equal cur_layout new_layout &&
-          Label.equal (List.hd layout) t.cfg.entry_label) then
-    Misc.fatal_error "Cfg set_layout: new layout is not a permutation of \
-                      the current layout, or first label is not entry";
+  if
+    not
+      ( Label.Set.equal cur_layout new_layout
+      && Label.equal (List.hd layout) t.cfg.entry_label )
+  then
+    Misc.fatal_error
+      "Cfg set_layout: new layout is not a permutation of the current \
+       layout, or first label is not entry";
   t.layout <- layout
 
 let remove_block t label =
@@ -124,10 +128,11 @@ let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
       t.cfg.blocks;
   Printf.fprintf oc "}\n"
 
-let save_as_dot t ?show_instr ?show_exn ?annotate_block
-    ?annotate_succ msg =
+let save_as_dot t ?show_instr ?show_exn ?annotate_block ?annotate_succ msg =
   let filename =
     Printf.sprintf "%s%s%s.dot"
+      (* some of all the special characters that confuse assemblers also
+         confuse dot. get rid of them.*)
       (X86_proc.string_of_symbol "" t.cfg.fun_name)
       (if msg = "" then "" else ".")
       msg
@@ -135,7 +140,8 @@ let save_as_dot t ?show_instr ?show_exn ?annotate_block
   if !Cfg.verbose then
     Printf.printf "Writing cfg for %s to %s\n" msg filename;
   let oc = open_out filename in
-  Misc.try_finally (fun () ->
-    print_dot t ?show_instr ?show_exn ?annotate_block ?annotate_succ oc)
+  Misc.try_finally
+    (fun () ->
+      print_dot t ?show_instr ?show_exn ?annotate_block ?annotate_succ oc)
     ~always:(fun () -> close_out oc)
     ~exceptionally:(fun _exn -> Misc.remove_file filename)
