@@ -159,9 +159,6 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
     | Is_even { ifso; ifnot } -> emit_bool (Ieventest, ifso) (Ioddtest, ifnot)
     | Is_true { ifso; ifnot } ->
         emit_bool (Itruetest, ifso) (Ifalsetest, ifnot)
-    | Int_test { lt; eq; gt; imm = Some 1; is_signed = false } ->
-        let find l = if Label.equal next.label l then None else Some l in
-        [L.Lcondbranch3 (find lt, find eq, find gt)]
     | Float_test { lt; eq; gt; uo } -> (
         let successor_labels =
           Label.Set.singleton lt |> Label.Set.add gt |> Label.Set.add eq
@@ -220,26 +217,41 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
               if Label.Set.mem next.label successor_labels then next.label
               else Label.Set.min_elt successor_labels
             in
-            let init = branch_or_fallthrough last in
-            Label.Set.fold
-              (fun lbl acc ->
-                let cond =
-                  mk_int_test ~lt:(Label.equal lt lbl)
-                    ~eq:(Label.equal eq lbl) ~gt:(Label.equal gt lbl)
-                in
-                let comp =
-                  match is_signed with
-                  | true -> Mach.Isigned cond
-                  | false -> Mach.Iunsigned cond
-                in
-                let test =
-                  match imm with
-                  | None -> Mach.Iinttest comp
-                  | Some n -> Iinttest_imm (comp, n)
-                in
-                L.Lcondbranch (test, lbl) :: acc)
-              (Label.Set.remove last successor_labels)
-              init
+            let successor_labels = Label.Set.remove last successor_labels in
+            let can_emit_Lcondbranch3 =
+              match (is_signed, imm) with
+              | false, Some 1 -> true
+              | false, Some _ | false, None | true, _ -> false
+            in
+            if
+              Label.Set.cardinal successor_labels = 2
+              && can_emit_Lcondbranch3
+            then
+              (* generates one cmp instruction for all conditional jumps *)
+              let find l =
+                if Label.equal next.label l then None else Some l
+              in
+              [L.Lcondbranch3 (find lt, find eq, find gt)]
+            else
+              let init = branch_or_fallthrough last in
+              Label.Set.fold
+                (fun lbl acc ->
+                  let cond =
+                    mk_int_test ~lt:(Label.equal lt lbl)
+                      ~eq:(Label.equal eq lbl) ~gt:(Label.equal gt lbl)
+                  in
+                  let comp =
+                    match is_signed with
+                    | true -> Mach.Isigned cond
+                    | false -> Mach.Iunsigned cond
+                  in
+                  let test =
+                    match imm with
+                    | None -> Mach.Iinttest comp
+                    | Some n -> Iinttest_imm (comp, n)
+                  in
+                  L.Lcondbranch (test, lbl) :: acc)
+                successor_labels init
         | _ -> assert false )
   in
   List.fold_left
