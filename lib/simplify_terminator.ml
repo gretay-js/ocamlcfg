@@ -32,6 +32,12 @@ let simplify_switch (block : C.basic_block) labels =
           { is_signed = false; imm = Some n; lt = l0; eq = ln; gt = ln }
       in
       block.terminator <- { block.terminator with desc }
+  | [(l0, m); (l1, 1); (l2, _)] when Label.equal l0 l2 ->
+      let desc =
+        C.Int_test
+          { is_signed = false; imm = Some m; lt = l0; eq = l1; gt = l0 }
+      in
+      block.terminator <- { block.terminator with desc }
   | [(l0, 1); (l1, 1); (l2, n)] ->
       assert (Label.equal labels.(0) l0);
       assert (Label.equal labels.(1) l1);
