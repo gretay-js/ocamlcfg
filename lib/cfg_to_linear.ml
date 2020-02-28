@@ -217,17 +217,19 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
               if Label.Set.mem next.label successor_labels then next.label
               else Label.Set.min_elt successor_labels
             in
-            let successor_labels = Label.Set.remove last successor_labels in
+            let cond_successor_labels =
+              Label.Set.remove last successor_labels
+            in
             let can_emit_Lcondbranch3 =
               match (is_signed, imm) with
               | false, Some 1 -> true
               | false, Some _ | false, None | true, _ -> false
             in
             if
-              Label.Set.cardinal successor_labels = 2
+              Label.Set.cardinal cond_successor_labels = 2
               && can_emit_Lcondbranch3
             then
-              (* generates one cmp instruction for all conditional jumps *)
+              (* generates one cmp instruction for all conditional jumps here *)
               let find l =
                 if Label.equal next.label l then None else Some l
               in
@@ -251,7 +253,7 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
                     | Some n -> Iinttest_imm (comp, n)
                   in
                   L.Lcondbranch (test, lbl) :: acc)
-                successor_labels init
+                cond_successor_labels init
         | _ -> assert false )
   in
   List.fold_left
