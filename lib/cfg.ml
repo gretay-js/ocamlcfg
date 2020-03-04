@@ -134,6 +134,37 @@ let set_fun_tailrec_entry_point_label t label =
 
 let iter_blocks t ~f = Label.Tbl.iter f t.blocks
 
+let equal t1 t2 =
+  if (Label.Tbl.length t1.blocks) <> (Label.Tbl.length t2.blocks) then false
+  else if not (Label.equal t1.entry t2.entry) then false
+  else (
+    let h = Label.Tbl.create (Label.Tbl.length t1.blocks) in
+    let s = Label.Set.empty in
+    let rec block_eq b1 b2 =
+      match Label.Tbl.find_opt h b1.start with
+      | Some l -> if not (Label.equal l b2.start) then false
+      | None ->
+        Labels
+        if _labels b1.start
+           not Label.equal b1.start b2.start then false
+      else
+
+    in
+
+    block_equal (t1.entry) (t2.entry)
+
+  else
+
+
+    Label.Tbl.iter  (fun l1 b1 ->
+      match Label.Tbl.find_opt t2.blocks l1 with
+      | None -> false
+      | Some b2 ->
+    )
+      t1.blocks
+  )
+
+
 (* XCR mshinwell: Rename to [can_raise_interproc]?
 
    gyorsh: removed this function, we don't seem to use it anywhere. *)

@@ -74,6 +74,8 @@ module Cfg_with_layout : sig
   val of_linear : Linear.fundecl -> preserve_orig_labels:bool -> t
 
   val to_linear : t -> Linear.instruction
+
+  val equal : t -> t -> bool
 end
 
 module Passes : sig

@@ -145,3 +145,7 @@ let save_as_dot t ?show_instr ?show_exn ?annotate_block ?annotate_succ msg =
       print_dot t ?show_instr ?show_exn ?annotate_block ?annotate_succ oc)
     ~always:(fun () -> close_out oc)
     ~exceptionally:(fun _exn -> Misc.remove_file filename)
+
+let equal t1 t2 =
+  if not (List.equal Int.compare t1.layout t2.layout) then false
+  else Cfg.equal t1.cfg t2.cfg
