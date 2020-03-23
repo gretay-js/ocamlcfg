@@ -11,7 +11,7 @@ type basic_block =
     mutable body : basic instruction list;
     mutable terminator : terminator instruction;
     mutable predecessors : Label.Set.t;
-        (** All predecessors, both normal and exceptional paths). *)
+        (** All predecessors, both normal and exceptional paths. *)
     trap_depth : int;
     (** Trap depth of the start of the block.
         Used for cross checking the construction of [exns],
@@ -19,13 +19,10 @@ type basic_block =
         from one block to the next. *)
     mutable exns : Label.Set.t;
         (** All possible handlers of a raise that
-            (1) can be triggered either by an explicit raise or
-            instructions such as a calls and alloc that appear in this block,
-            and
-            (2) handled within the same function.
+            (1) can be triggered either by an explicit raise, or instructions
+            such as calls and allocations, that appear(s) in this block; and
+            (2) are within the same function.
             [exns] is a subset of the trap handler block labels of the cfg. *)
-    (* XCR mshinwell: We should clarify the sentence about the flow of
-       exceptions between functions. *)
     mutable can_raise : bool;
         (** Does this block contain any instruction that can raise, such as a
             call, bounds check, allocation, or an explicit [raise]? *)
@@ -37,6 +34,7 @@ type basic_block =
         (** Is this block a trap handler (i.e. is it an exn successor
             of another block) or not? *)
     mutable dead : bool;
+        (* CR mshinwell: Please ensure everything is formatted to 80 cols. *)
         (** This block must be unreachable from function entry. This field is set during
             cfg construction (if trap stacks are unresolved) and used during dead block
             elimination for checking. *)
@@ -81,14 +79,14 @@ val successor_labels
   -> basic_block
   -> Label.Set.t
 (** [exn] does not account for exceptional flow from the block
-    that goes outside of the procedure. *)
+    that goes outside of the function. *)
 
 val replace_successor_labels
   : t
   -> normal:bool
   -> exn:bool
   -> basic_block
-  -> f:(Label.t->Label.t)
+  -> f:(Label.t -> Label.t)
   -> unit
 
 val mem_block : t -> Label.t -> bool
