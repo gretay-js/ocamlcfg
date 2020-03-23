@@ -22,15 +22,11 @@ let disconnect cfg_with_layout label =
   let successors = C.successor_labels ~normal:true ~exn:true cfg block in
   let has_predecessors = not (Label.Set.is_empty block.predecessors) in
   let n = Label.Set.cardinal successors in
-  (* XCR mshinwell: Use [List.compare_length_with]
-
-     gyorsh: it's a set now.
-     I use compare_length_with elsewhere whenever possible! *)
   let has_more_than_one_successor = n > 1 in
   if !C.verbose then Printf.printf "Disconnect %d in %s\n" label cfg.fun_name;
   if has_more_than_one_successor && has_predecessors then
-    (* CR-someday xclerc: it feels like this condition is really tied to the current
-     * features of the tool. *)
+    (* CR-someday xclerc: it feels like this condition is really tied to the
+     * current features of the tool. *)
     Misc.fatal_errorf
       "Cannot disconnect block %a: it has more than one successor and at \
        least one predecessor"
@@ -58,27 +54,4 @@ let disconnect cfg_with_layout label =
   ) else (
     assert (Label.Set.is_empty block.predecessors)
   );
-
   CL.remove_block cfg_with_layout label
-  (* XCR mshinwell: The next two lines should move to e.g.
-     [Cfg.invalidate_block] together with an associated test for that,
-     perhaps. When is such a test used? If it is not used, can we skip this
-     procedure?
-
-     gyorsh: not sure what to do with this CR. It's a valid block but
-     detached. Once it's removed from all the data structures, it will be
-     unreachable by ocaml. Are you suggesting that it should be kept around,
-     maybe for debugging?
-
-     mshinwell: I'm just not sure what the point is of updating this value
-     if it's not going to be reachable.  Or might we come across it again?
-
-     gyorsh: no, it should be completely unreachable after this. removed
-     the unnecessary updates, and moved the code to Cfg_with_layout.
-
-     xclerc: well, "someone" might have stored the label of the block, and
-     try to use it after it has been disconnected. Now that we check whether
-     a label is valid before trying to use it, I think an assertion will
-     be violated if this happens.
-  *)
-
