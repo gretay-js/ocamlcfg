@@ -68,7 +68,7 @@ let block cfg (block : C.basic_block) =
   | Never ->
       Misc.fatal_errorf "Cannot simplify terminator: Never (in block %d)"
         block.start
-  | Is_even _ | Is_true _ | Int_test _ | Float_test _ ->
+  | Parity_test _ | Truth_test _ | Int_test _ | Float_test _ ->
       let labels = C.successor_labels cfg ~normal:true ~exn:false block in
       if Label.Set.cardinal labels = 1 then
         let l = Label.Set.min_elt labels in

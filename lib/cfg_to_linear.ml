@@ -133,7 +133,8 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
   (* CR-soon gyorsh: for successor labels that are not fallthrough, order of
      branch instructions should depend on perf data and possibly the relative
      position of the target labels and the current block: whether the jumps
-     are forward or back. This information can be obtained from the layout. *)
+     are forward or back. This information can be obtained from the layout.
+     For now, we are make an arbitrary choice. *)
   let branch_or_fallthrough lbl =
     if Label.equal next.label lbl then [] else [L.Lbranch lbl]
   in
@@ -160,8 +161,9 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
     | Switch labels -> [L.Lswitch labels]
     | Never -> Misc.fatal_error "Cannot linearize terminator: Never"
     | Always label -> branch_or_fallthrough label
-    | Is_even { ifso; ifnot } -> emit_bool (Ieventest, ifso) (Ioddtest, ifnot)
-    | Is_true { ifso; ifnot } ->
+    | Parity_test { ifso; ifnot } ->
+        emit_bool (Ieventest, ifso) (Ioddtest, ifnot)
+    | Truth_test { ifso; ifnot } ->
         emit_bool (Itruetest, ifso) (Ifalsetest, ifnot)
     | Float_test { lt; eq; gt; uo } -> (
         let successor_labels =
@@ -225,10 +227,13 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
                it. Otherwise, the last jump could be unconditional. *)
             let last =
               if Label.Set.mem next.label successor_labels then next.label
-                (* CR mshinwell: I think a comment here saying that the next
+                (* XCR mshinwell: I think a comment here saying that the next
                    line is making an arbitrary choice would be useful, this
-                   is a bit tricky to follow *)
-              else Label.Set.min_elt successor_labels
+                   is a bit tricky to follow
+
+                   gyorsh: there is also CR-soon at the top of this function. *)
+              else (* arbitrary choice *)
+                Label.Set.min_elt successor_labels
             in
             let cond_successor_labels =
               Label.Set.remove last successor_labels
@@ -294,7 +299,8 @@ let need_starting_label (cfg_with_layout : CL.t) (block : Cfg.basic_block)
         match prev_block.terminator.desc with
         | Switch _ -> true
         | Never -> Misc.fatal_error "Cannot linearize terminator: Never"
-        | Always _ | Is_even _ | Is_true _ | Float_test _ | Int_test _ ->
+        | Always _ | Parity_test _ | Truth_test _ | Float_test _ | Int_test _
+          ->
             (* If the label came from the original [Linear] code, preserve it
                for checking that the conversion from [Linear] to [Cfg] and
                back is the identity; and for various assertions in reorder. *)

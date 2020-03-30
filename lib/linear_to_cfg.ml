@@ -209,8 +209,8 @@ let can_raise_terminator (i : C.terminator) =
   (* XCR mshinwell: Make match exhaustive *)
   match i with
   | Raise _ | Tailcall (Func _) -> true
-  | Never | Always _ | Is_even _ | Is_true _ | Float_test _ | Int_test _
-  | Switch _ | Return
+  | Never | Always _ | Parity_test _ | Truth_test _ | Float_test _
+  | Int_test _ | Switch _ | Return
   | Tailcall (Self _) ->
       false
 
@@ -390,7 +390,7 @@ let add_terminator t (block : C.basic_block) (i : L.instruction)
      think, not sure why, and it is needed. I am putting it back. *)
   ( match desc with
   | Never -> Misc.fatal_error "Cannot add terminator: Never"
-  | Always _ | Is_even _ | Is_true _ | Float_test _ | Int_test _ -> ()
+  | Always _ | Parity_test _ | Truth_test _ | Float_test _ | Int_test _ -> ()
   | Switch _ | Return | Raise _ | Tailcall _ ->
       if not (Linear_utils.defines_label i.next) then
         Misc.fatal_errorf "Linear instruction not followed by label:@ %a"
@@ -515,10 +515,10 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       let inv = fallthrough.label in
       let desc : C.terminator =
         match (cond : Mach.test) with
-        | Ieventest -> Is_even { ifso = lbl; ifnot = inv }
-        | Ioddtest -> Is_even { ifso = inv; ifnot = lbl }
-        | Itruetest -> Is_true { ifso = lbl; ifnot = inv }
-        | Ifalsetest -> Is_true { ifso = inv; ifnot = lbl }
+        | Ieventest -> Parity_test { ifso = lbl; ifnot = inv }
+        | Ioddtest -> Parity_test { ifso = inv; ifnot = lbl }
+        | Itruetest -> Truth_test { ifso = lbl; ifnot = inv }
+        | Ifalsetest -> Truth_test { ifso = inv; ifnot = lbl }
         | Ifloattest cmp -> Float_test (of_cmm_float_test cmp ~lbl ~inv)
         | Iinttest cmp -> Int_test (mk_int_test cmp ~lbl ~inv ~imm:None)
         | Iinttest_imm (cmp, n) ->

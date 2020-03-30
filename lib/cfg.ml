@@ -40,7 +40,7 @@ let successor_labels_normal t ti =
   | Return | Raise _ | Tailcall (Func _) -> Label.Set.empty
   | Never -> Label.Set.empty
   | Always l -> Label.Set.singleton l
-  | Is_even { ifso; ifnot } | Is_true { ifso; ifnot } ->
+  | Parity_test { ifso; ifnot } | Truth_test { ifso; ifnot } ->
       Label.Set.singleton ifso |> Label.Set.add ifnot
   | Float_test { lt; gt; eq; uo } ->
       Label.Set.singleton lt |> Label.Set.add gt |> Label.Set.add eq
@@ -74,8 +74,10 @@ let replace_successor_labels t ~normal ~exn block ~f =
       match block.terminator.desc with
       | Never -> Never
       | Always l -> Always (f l)
-      | Is_even { ifso; ifnot } -> Is_even { ifso = f ifso; ifnot = f ifnot }
-      | Is_true { ifso; ifnot } -> Is_true { ifso = f ifso; ifnot = f ifnot }
+      | Parity_test { ifso; ifnot } ->
+          Parity_test { ifso = f ifso; ifnot = f ifnot }
+      | Truth_test { ifso; ifnot } ->
+          Truth_test { ifso = f ifso; ifnot = f ifnot }
       | Int_test { lt; eq; gt; is_signed; imm } ->
           Int_test { lt = f lt; eq = f eq; gt = f gt; is_signed; imm }
       | Float_test { lt; eq; gt; uo } ->
@@ -218,10 +220,10 @@ let print_terminator oc ?(sep = "\n") ti =
   match ti.desc with
   | Never -> Printf.fprintf oc "deadend%s" sep
   | Always l -> Printf.fprintf oc "goto %d%s" l sep
-  | Is_even { ifso; ifnot } ->
+  | Parity_test { ifso; ifnot } ->
       Printf.fprintf oc "if even goto %d%sif odd goto %d%s" ifso sep ifnot
         sep
-  | Is_true { ifso; ifnot } ->
+  | Truth_test { ifso; ifnot } ->
       Printf.fprintf oc "if true goto %d%sif false goto %d%s" ifso sep ifnot
         sep
   | Float_test { lt; eq; gt; uo } ->

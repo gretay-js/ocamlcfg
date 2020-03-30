@@ -1,17 +1,6 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-(* CR-soon mshinwell: I'm unsure why this needs to be [private] when there
-   are accessor functions below. xclerc: I guess you mean the type could just
-   be abstract? mshinwell: Yes *)
-type t =
-  { cfg : Cfg.t;
-    mutable layout : Label.t list;
-        (** The order in which blocks should be emitted *)
-    mutable new_labels : Label.Set.t;
-        (** For validation, keeps track of labels created by [Linear_to_cfg] *)
-    preserve_orig_labels : bool
-        (** Set for validation, unset for optimization. *)
-  }
+type t
 
 val create :
   Cfg.t ->

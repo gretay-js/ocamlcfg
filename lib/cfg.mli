@@ -36,8 +36,6 @@ type basic_block =
         (** This block must be unreachable from function entry. This field is
             set during cfg construction (if trap stacks are unresolved) and
             used during dead block elimination for checking. *)
-        (* CR mshinwell: Please ensure everything is formatted to 80 cols. *)
-
         (* CR-soon gyorsh: The current implementation allows multiple
            pushtraps in each block means that different trap stacks are
            associated with the block at different points, and a raise from
