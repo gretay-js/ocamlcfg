@@ -1,6 +1,3 @@
-(* XCR mshinwell: Discuss licence, ensure headers are consistent and check
-   that author attributions are correct. *)
-
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 let verbose = ref false
@@ -52,11 +49,6 @@ let successor_labels_normal t ti =
       Label.Set.singleton lt |> Label.Set.add gt |> Label.Set.add eq
 
 let successor_labels t ~normal ~exn block =
-  (* XCR mshinwell: We need to resolve or defer all CRs before this can be
-     used in production---what is happening with this one?
-
-     gyorsh: This should have been a comment, not a CR, but it is not
-     relevant any more in the new representation. I removed the comment. *)
   match (normal, exn) with
   | false, false -> Label.Set.empty
   | true, false -> successor_labels_normal t block.terminator
@@ -90,7 +82,7 @@ let replace_successor_labels t ~normal ~exn block ~f =
           Float_test { lt = f lt; eq = f eq; gt = f gt; uo = f uo }
       | Switch labels -> Switch (Array.map f labels)
       | Tailcall (Self _) ->
-          (* XCR mshinwell: It seems odd that this function will change the
+          (* CR mshinwell: It seems odd that this function will change the
              entry point label in [t] no matter which [block] we have... In
              fact, when this function lived in disconnect_block.ml, there was
              the following check: assert (Label.equal being_disconnected
@@ -98,7 +90,13 @@ let replace_successor_labels t ~normal ~exn block ~f =
 
              gyorsh: the check is still here, when [f] is applied to
              t.fun_tailrec_entry_point_label and [f] itself is defined in
-             disconnect_block.ml as before. *)
+             disconnect_block.ml as before.
+
+             mshinwell: There's still something unsettling about this.
+             Now it's the case that if there is no [Tailcall Self] then
+             we won't affect [t.fun_tailrec_entry_point_label].  Maybe this
+             case should do nothing and [fun_tailrec_entry_point_label]
+             should unilaterally be updated earlier in this function? *)
           t.fun_tailrec_entry_point_label <-
             f t.fun_tailrec_entry_point_label;
           block.terminator.desc
@@ -109,14 +107,15 @@ let replace_successor_labels t ~normal ~exn block ~f =
 let remove_block_exn t label =
   match Label.Tbl.find t.blocks label with
   | exception Not_found ->
-      Misc.fatal_errorf "Cfg.remove_block: block %d not found" label
+      Misc.fatal_errorf "Cfg.remove_block_exn: block %d not found" label
   | _ -> Label.Tbl.remove t.blocks label
 
 let get_block t label = Label.Tbl.find_opt t.blocks label
 
 let get_block_exn t label =
   match Label.Tbl.find t.blocks label with
-  | exception Not_found -> Misc.fatal_errorf "Block %d not found" label
+  | exception Not_found ->
+      Misc.fatal_errorf "Cfg.get_block_exn: block %d not found" label
   | block -> block
 
 let fun_name t = t.fun_name
@@ -133,10 +132,6 @@ let set_fun_tailrec_entry_point_label t label =
   t.fun_tailrec_entry_point_label <- label
 
 let iter_blocks t ~f = Label.Tbl.iter f t.blocks
-
-(* XCR mshinwell: Rename to [can_raise_interproc]?
-
-   gyorsh: removed this function, we don't seem to use it anywhere. *)
 
 (* Printing for debug *)
 

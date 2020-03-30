@@ -24,4 +24,4 @@ let rec defines_label (i : Linear.instruction) =
   | Lpushtrap _
   | Lpoptrap
   | Lraise _
-    -> false  (* XCR mshinwell: Make this match exhaustive *)
+    -> false

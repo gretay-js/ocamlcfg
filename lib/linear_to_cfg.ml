@@ -242,16 +242,10 @@ let check_traps t label (block : C.basic_block) =
                there is a bug in trap stacks."
               label )
 
-(* XCR mshinwell: This function should be renamed, since it sounds like an
-   invariant-checking function at the moment, but actually updates
-   [block.exns].
-
-   gyorsh: renamed and split into check_traps and register_exns *)
 let register_exns t label (block : C.basic_block) =
   (* All exns in this block must be based off the trap_stack_at_start, which
      must have been successfully resolved by T.unify, i.e., does not contain
      any Unknown frames or labels. *)
-  (* XCR mshinwell: Clarify what "resolved" means *)
   match Label.Tbl.find_opt t.exns label with
   | None -> ()
   | Some exns ->
@@ -265,8 +259,6 @@ let register_exns t label (block : C.basic_block) =
            some point during the block, which can be either deeper or
            shallower than the trap_stack_at_entry, because a block can
            contain pushtrap and poptrap. *)
-        (* XCR mshinwell: Call this variable [trap_stack] or something rather
-           than [l]. *)
         match T.top_exn trap_stack with
         | None ->
             Misc.fatal_errorf "register_exns: empty trap stack for %d" label
@@ -302,7 +294,6 @@ let check_and_register_traps t =
   Label.Set.iter
     (fun label ->
       let trap_block = C.get_block_exn t.cfg label in
-      (* XCR mshinwell: This again references the mythical Entertrap *)
       if not trap_block.is_trap_handler then
         Misc.fatal_errorf
           "Label %d used as a handler in Lpushtrap, but the block at %d \
