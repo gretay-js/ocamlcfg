@@ -2,10 +2,10 @@
 
 (** Miscellaneous utility functions on [Linear] code. *)
 
-type labelled_insn = {
-  label : Label.t;
-  insn : Linear.instruction;
-}
+type labelled_insn =
+  { label : Label.t;
+    insn : Linear.instruction
+  }
 
 val labelled_insn_end : labelled_insn
 

@@ -13,42 +13,41 @@ type basic_block =
     mutable predecessors : Label.Set.t;
         (** All predecessors, both normal and exceptional paths. *)
     trap_depth : int;
-    (** Trap depth of the start of the block.
-        Used for cross checking the construction of [exns],
-        and for emitting adjust trap on edges
-        from one block to the next. *)
+        (** Trap depth of the start of the block. Used for cross checking the
+            construction of [exns], and for emitting adjust trap on edges
+            from one block to the next. *)
     mutable exns : Label.Set.t;
-        (** All possible handlers of a raise that
-            (1) can be triggered either by an explicit raise, or instructions
-            such as calls and allocations, that appear(s) in this block; and
-            (2) are within the same function.
-            [exns] is a subset of the trap handler block labels of the cfg. *)
+        (** All possible handlers of a raise that (1) can be triggered either
+            by an explicit raise, or instructions such as calls and
+            allocations, that appear(s) in this block; and (2) are within the
+            same function. [exns] is a subset of the trap handler block
+            labels of the cfg. *)
     mutable can_raise : bool;
         (** Does this block contain any instruction that can raise, such as a
             call, bounds check, allocation, or an explicit [raise]? *)
     mutable can_raise_interproc : bool;
         (** This block raises an exn that is not handled in this function,
-            [can_raise_interproc] implies [can_raise] but not necessarily vice
-            versa. *)
+            [can_raise_interproc] implies [can_raise] but not necessarily
+            vice versa. *)
     mutable is_trap_handler : bool;
-        (** Is this block a trap handler (i.e. is it an exn successor
-            of another block) or not? *)
-    mutable dead : bool;
+        (** Is this block a trap handler (i.e. is it an exn successor of
+            another block) or not? *)
+    mutable dead : bool
+        (** This block must be unreachable from function entry. This field is
+            set during cfg construction (if trap stacks are unresolved) and
+            used during dead block elimination for checking. *)
         (* CR mshinwell: Please ensure everything is formatted to 80 cols. *)
-        (** This block must be unreachable from function entry. This field is set during
-            cfg construction (if trap stacks are unresolved) and used during dead block
-            elimination for checking. *)
-    (* CR-soon gyorsh: The current implementation allows multiple pushtraps in
-       each block means that different trap stacks are associated with the block
-       at different points, and a raise from this block
-       can go to different handlers, depending on which one is on the top of the
-       stack. After we split the blocks based on Pushtrap/Poptrap,
-       each block will have a unique trap stack associated with it.
-       [exns] will not be needed, as the exn-successor will be uniquely
-       determined by can_raise + top of trap stack.
-       [trap_depth] will not needed, as it can be derived with
-       the length of the trap stack. *)
 
+        (* CR-soon gyorsh: The current implementation allows multiple
+           pushtraps in each block means that different trap stacks are
+           associated with the block at different points, and a raise from
+           this block can go to different handlers, depending on which one is
+           on the top of the stack. After we split the blocks based on
+           Pushtrap/Poptrap, each block will have a unique trap stack
+           associated with it. [exns] will not be needed, as the
+           exn-successor will be uniquely determined by can_raise + top of
+           trap stack. [trap_depth] will not needed, as it can be derived
+           with the length of the trap stack. *)
   }
 
 (** Control Flow Graph of a function. *)
@@ -72,22 +71,18 @@ val fun_tailrec_entry_point_label : t -> Label.t
 
 val predecessor_labels : basic_block -> Label.t list
 
-val successor_labels
-  : t
-  -> normal:bool
-  -> exn:bool
-  -> basic_block
-  -> Label.Set.t
-(** [exn] does not account for exceptional flow from the block
-    that goes outside of the function. *)
+(** [exn] does not account for exceptional flow from the block that goes
+    outside of the function. *)
+val successor_labels :
+  t -> normal:bool -> exn:bool -> basic_block -> Label.Set.t
 
-val replace_successor_labels
-  : t
-  -> normal:bool
-  -> exn:bool
-  -> basic_block
-  -> f:(Label.t -> Label.t)
-  -> unit
+val replace_successor_labels :
+  t ->
+  normal:bool ->
+  exn:bool ->
+  basic_block ->
+  f:(Label.t -> Label.t) ->
+  unit
 
 val mem_block : t -> Label.t -> bool
 

@@ -92,11 +92,11 @@ let replace_successor_labels t ~normal ~exn block ~f =
              t.fun_tailrec_entry_point_label and [f] itself is defined in
              disconnect_block.ml as before.
 
-             mshinwell: There's still something unsettling about this.
-             Now it's the case that if there is no [Tailcall Self] then
-             we won't affect [t.fun_tailrec_entry_point_label].  Maybe this
-             case should do nothing and [fun_tailrec_entry_point_label]
-             should unilaterally be updated earlier in this function? *)
+             mshinwell: There's still something unsettling about this. Now
+             it's the case that if there is no [Tailcall Self] then we won't
+             affect [t.fun_tailrec_entry_point_label]. Maybe this case should
+             do nothing and [fun_tailrec_entry_point_label] should
+             unilaterally be updated earlier in this function? *)
           t.fun_tailrec_entry_point_label <-
             f t.fun_tailrec_entry_point_label;
           block.terminator.desc

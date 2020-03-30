@@ -15,9 +15,9 @@ let block_is_dead cfg_with_layout (block : C.basic_block) =
 
 (* CR-someday xclerc: not to say the implementation should change any time
    soon, but since it was mentioned the other day: with support for generic
-   data flow analysis, a trivial analysis would identify all live/dead
-   blocks in one go and the function below would no longer be recursive.
-   This would also eliminate the dead cycles mentioned above. *)
+   data flow analysis, a trivial analysis would identify all live/dead blocks
+   in one go and the function below would no longer be recursive. This would
+   also eliminate the dead cycles mentioned above. *)
 let rec eliminate_dead_blocks cfg_with_layout =
   let cfg = CL.cfg cfg_with_layout in
   if CL.preserve_orig_labels cfg_with_layout then
@@ -29,7 +29,7 @@ let rec eliminate_dead_blocks cfg_with_layout =
         if block_is_dead cfg_with_layout block then label :: found else found)
       cfg.blocks []
   in
-  if (List.compare_length_with found_dead 0) > 0 then (
+  if List.compare_length_with found_dead 0 > 0 then (
     List.iter (Disconnect_block.disconnect cfg_with_layout) found_dead;
     if !C.verbose then (
       Printf.printf "Found and eliminated %d dead blocks in function %s.\n"
@@ -40,14 +40,12 @@ let rec eliminate_dead_blocks cfg_with_layout =
     (* Termination: the number of remaining blocks is strictly smaller in
        each recursive call. *)
     eliminate_dead_blocks cfg_with_layout )
-  else (
-      (* check that no blocks are left that are marked as dead *)
+  else
+    (* check that no blocks are left that are marked as dead *)
     C.iter_blocks cfg ~f:(fun label block ->
-      if block.dead then
-        Misc.fatal_errorf "Block %d in %s marked as dead but not eliminated\n"
-          label cfg.fun_name)
-  )
+        if block.dead then
+          Misc.fatal_errorf
+            "Block %d in %s marked as dead but not eliminated\n" label
+            cfg.fun_name)
 
-let run cfg_with_layout =
-  eliminate_dead_blocks cfg_with_layout;
-
+let run cfg_with_layout = eliminate_dead_blocks cfg_with_layout

@@ -12,7 +12,8 @@ let add_discriminator dbg file d =
 
 let add t ~file =
   let update (i : _ Cfg.instruction) =
-    { i with dbg = add_discriminator i.dbg file i.id } in
+    { i with dbg = add_discriminator i.dbg file i.id }
+  in
   let update_block _ (block : Cfg.basic_block) =
     block.terminator <- update block.terminator;
     block.body <- List.map update block.body

@@ -3,5 +3,7 @@
 type t = int
 
 include Identifiable.S with type t := t
+
 val equal : t -> t -> bool
+
 val to_string : t -> string

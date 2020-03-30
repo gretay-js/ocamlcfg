@@ -6,22 +6,19 @@ module CL = Cfg_with_layout
 let is_fallthrough_block cfg_with_layout (block : C.basic_block) =
   let cfg = CL.cfg cfg_with_layout in
   if
-    (Label.equal cfg.entry_label block.start)
+    Label.equal cfg.entry_label block.start
     || block.is_trap_handler
     || List.length block.body > 0
     || block.can_raise
-    (* We need to check for can_raise here, because of Tailcall to Self
-       that can raise and has a single successor. *)
+    (* We need to check for can_raise here, because of Tailcall to Self that
+       can raise and has a single successor. *)
   then None
   else
     let successors = C.successor_labels ~normal:true ~exn:false cfg block in
-    if Label.Set.cardinal successors = 1 then (
+    if Label.Set.cardinal successors = 1 then
       let target_label = Label.Set.min_elt successors in
-      if Label.equal target_label block.start then
-        None (* self-loop *)
-      else
-        Some target_label
-    )
+      if Label.equal target_label block.start then None (* self-loop *)
+      else Some target_label
     else None
 
 (* CR-soon mshinwell: The logic below looks similar in structure to
@@ -58,7 +55,7 @@ let run cfg_with_layout =
      a single successor) by rerouting their predecessors to point directly to
      their successors. It can create a new fallthrough block, for example: if
      we have edges { A -> B, B -> C , A -> C }, with A empty, and B being the
-     only fallthrough block.  If we eliminate B, then A becomes fallthrough.
+     only fallthrough block. If we eliminate B, then A becomes fallthrough.
      As such we iterate until fixpoint.
 
      Disconnected fallthrough nodes can be eliminate by dead block

@@ -1,60 +1,60 @@
 (* XCR mshinwell: Please add file header and an explanation of what this
    module is doing (ideally with comments for each function below). *)
 [@@@ocaml.warning "+a-30-40-41-42"]
+
 (* Mutable representation of a stack of handlers.
 
-   Intended for computing a stack of trap handlers reachable
-   at each program location in a function.
-   The top of the stack represents the current trap handler,
-   which will be called if the current instruction raises an exception.
-*)
+   Intended for computing a stack of trap handlers reachable at each program
+   location in a function. The top of the stack represents the current trap
+   handler, which will be called if the current instruction raises an
+   exception. *)
 
-
-module type D =
-sig
+module type D = sig
   type t
-  val equal : t -> t -> bool
-  (** for unification *)
 
-  val to_string : t -> string
+  (** for unification *)
+  val equal : t -> t -> bool
+
   (** for debug printing *)
+  val to_string : t -> string
 end
 
-module type S =
-sig
-  type d
+module type S = sig
   (** The type of elements pushed on the stack *)
+  type d
 
-  type t
   (** The stack of elements *)
+  type t
 
   exception Unresolved
 
-  val empty : unit -> t
   (** Returns the representation of an empty stack. *)
+  val empty : unit -> t
 
-  val unknown : unit -> t
   (** Returns the representation of an unknown stack. *)
+  val unknown : unit -> t
 
   val pop : t -> t
+
   val push : t -> d -> t
 
   (** Returns list representation of stack [t], with the head of the list
-      representing the top of the stack. Raises [Unresolved] if [t]
-      contains any [Unknown]. *)
+      representing the top of the stack. Raises [Unresolved] if [t] contains
+      any [Unknown]. *)
   val to_list_exn : t -> d list
 
   (* XCR mshinwell: Document which is the "top" of the stack. *)
+
   (** Returns the top of the stack [t], or [None] if [t] is empty. Raises
-      [Unresolved] if the top of [t] cannot be resolved,
-      i.e., top of [t] is Unknown or contains an unknown label. *)
+      [Unresolved] if the top of [t] cannot be resolved, i.e., top of [t] is
+      Unknown or contains an unknown label. *)
   val top_exn : t -> d option
 
-  val unify : t -> t -> unit
   (** [unify s1 s2] fails if s1 and s2 do not agree on the known elements,
-      and resolves unknowns whenever possible, destructively modifying
-      [s1] and [s2]. Fails if the destructive update would create a cycle in
-      the data structure.  *)
+      and resolves unknowns whenever possible, destructively modifying [s1]
+      and [s2]. Fails if the destructive update would create a cycle in the
+      data structure. *)
+  val unify : t -> t -> unit
 
   (* Debug printing *)
 
@@ -63,5 +63,5 @@ sig
   val print_pair : string -> t -> t -> unit
 end
 
-module Make (D : D) : S with type d = D.t
 (** Functor building stacks of *)
+module Make (D : D) : S with type d = D.t
