@@ -98,7 +98,33 @@ let replace_successor_labels t ~normal ~exn block ~f =
              it's the case that if there is no [Tailcall Self] then we won't
              affect [t.fun_tailrec_entry_point_label]. Maybe this case should
              do nothing and [fun_tailrec_entry_point_label] should
-             unilaterally be updated earlier in this function? *)
+             unilaterally be updated earlier in this function?
+
+             gyorsh: I think I finally see what you are concerned about:
+
+             Suppose that there are two "Tailcall Self" sites in the
+             function, say blocks L1 and L2 both have Tailcall Self as their
+             terminator. Then, if we call replace_successor_labels on L1 but
+             not on L2 we get an inconsistent CFG, as there is only one
+             tailrec entry point.
+
+             Changing t.fun_tailrec_entry_point_label has effect on other
+             blocks, it's not local to the [block] that is passed as argument
+             to replace_successor_labels. So how do we guarantee that all
+             other blocks that refer to t.fun_tailrec_entry_point_label are
+             updated?
+
+             The reason is that if a block terminates with tailcall self,
+             then its successor is the block at
+             t.fun_tailrec_entry_point_label and the tailrec entry point
+             block has as its predecessors *all* the "tailcall self" blocks.
+             We currently call replace_successor_labels on all successors of
+             a block that is a fallthrough block.
+
+             The bottom line is that it is correct currently, but
+             replace_successor_labels is very specific to eliminate
+             fallthrough. Perhaps it is better to move it back to
+             disconnect_block.ml ? *)
           t.fun_tailrec_entry_point_label <-
             f t.fun_tailrec_entry_point_label;
           block.terminator.desc
