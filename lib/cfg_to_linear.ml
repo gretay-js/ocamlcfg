@@ -114,15 +114,13 @@ let mk_float_cond ~lt ~eq ~gt ~uo =
   | true, true, true, true -> assert false (* unconditional jump *)
   | false, false, false, false -> assert false (* no successors *)
   | true, true, true, false ->
-      Printf.eprintf "Oh, we can actually get here!\n";
-      Misc.fatal_error "disjunction of conditions"
+      Misc.fatal_error "Encountered disjunction of conditions: [CFle; CFgt]"
   (* Any [CFle; CFgt] *)
   (* CR gyorsh: remove assert? *)
   (* CR-soon gyorsh: how to choose between equivalent representations:
      [CFle;CFgt] [CFlt;CFge] [CFlt;CFeq;CFgt] *)
   | false, true, true, false ->
-      Printf.eprintf "Oh, we can actually get here!\n";
-      Misc.fatal_error "disjunction of conditions"
+      Misc.fatal_error "Encountered disjunction of conditions [CFlt; CFgt]"
   (* Any [CFlt; CFgt] *)
   | false, false, false, true -> Must_be_last
   | true, false, false, true -> Must_be_last
