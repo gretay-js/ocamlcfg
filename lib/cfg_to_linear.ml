@@ -120,7 +120,10 @@ let mk_float_cond ~lt ~eq ~gt ~uo =
   (* CR gyorsh: remove assert? *)
   (* CR-soon gyorsh: how to choose between equivalent representations:
      [CFle;CFgt] [CFlt;CFge] [CFlt;CFeq;CFgt] *)
-  | false, true, true, false -> Any [CFlt; CFgt]
+  | false, true, true, false ->
+      Printf.eprintf "Oh, we can actually get here!\n";
+      Misc.fatal_error "disjunction of conditions"
+  (* Any [CFlt; CFgt] *)
   | false, false, false, true -> Must_be_last
   | true, false, false, true -> Must_be_last
 
@@ -235,7 +238,8 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
                it. Otherwise, the last jump could be unconditional. *)
             let last =
               if Label.Set.mem next.label successor_labels then next.label
-              else (* arbitrary choice (see also CR above) *)
+              else
+                (* arbitrary choice (see also CR above) *)
                 Label.Set.min_elt successor_labels
             in
             let cond_successor_labels =
