@@ -81,20 +81,18 @@ let mk_int_test ~lt ~eq ~gt : Cmm.integer_comparison =
   | true, true, true -> assert false
   | false, false, false -> assert false
 
-(* CR mshinwell: Is this second paragraph still correct given that we've
+(* XCR mshinwell: Is this second paragraph still correct given that we've
    removed the special "last" handling? *)
 
 (* Certain "unordered" outcomes of float comparisons are not expressible as a
    single Cmm.float_comparison operator, or a disjunction of disjoint
-   Cmm.float_comparison operators.
+   Cmm.float_comparison operators. For example, for float_test { lt = L0; eq
+   = L0; gt = L0; uo = L1 } there is no Mach comparison for the branch to L1.
 
-   For these cases, we emit a jump with a comparison operator that is not
-   disjoint from previously emitted comparisons for this block, and therefore
-   must appear after them.
-
-   For example, for float_test { lt = L0; eq = L0; gt = L0; uo = L1 } there
-   is no Mach comparison for the branch to L1. We haven't seen a program that
-   leads to it yet, but it is possibly that future transformations will. *)
+   We haven't seen a program that leads to it yet, but it is possibly that
+   future transformations will. So, for now these cases are fatal error. If
+   we need to handle them, if needed, we can emit an unconditional jump that
+   appears last, after all other conditional jumps. *)
 type float_cond =
   | Must_be_last
   | Any of Cmm.float_comparison list
@@ -205,11 +203,6 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
                   Misc.fatal_errorf
                     "Illegal branch: one successor label must be last %d" lbl
                     ()
-                  (* CR mshinwell: This CR should be removed (in fact, check
-                     throughout that there are no outstanding CR ones and
-                     either resolve or defer). *)
-                  (* CR gyorsh: remove assert? *)
-                  (* lbl *)
               | _ ->
                   Misc.fatal_error
                     "Illegal branch: more than one successor label that \

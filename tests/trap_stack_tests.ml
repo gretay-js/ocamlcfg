@@ -1,3 +1,5 @@
+(* CR-gyorsh: currently these tests are not run, they need to move into the
+   library, because trap_stack is not visible from outside ocamlcfg library. *)
 (* CR mshinwell: Add file header *)
 
 (* CR mshinwell: Make these into expect tests? *)

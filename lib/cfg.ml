@@ -84,23 +84,16 @@ let replace_successor_labels t ~normal ~exn block ~f =
           Float_test { lt = f lt; eq = f eq; gt = f gt; uo = f uo }
       | Switch labels -> Switch (Array.map f labels)
       | Tailcall (Self _) ->
-          (* CR mshinwell: It seems odd that this function will change the
-             entry point label in [t] no matter which [block] we have... In
-             fact, when this function lived in disconnect_block.ml, there was
-             the following check: assert (Label.equal being_disconnected
-             cfg.fun_tailrec_entry_point_label);
-
-             gyorsh: the check is still here, when [f] is applied to
-             t.fun_tailrec_entry_point_label and [f] itself is defined in
-             disconnect_block.ml as before.
-
-             mshinwell: There's still something unsettling about this. Now
-             it's the case that if there is no [Tailcall Self] then we won't
+          (* CR-soon gyorsh: If there is no [Tailcall Self] then we won't
              affect [t.fun_tailrec_entry_point_label]. Maybe this case should
              do nothing and [fun_tailrec_entry_point_label] should
-             unilaterally be updated earlier in this function?
+             unilaterally be updated earlier in this function? *)
+          (* CR-soon gyorsh: Move replace_successor_labels back to
+             disconnect_block.ml ?
 
-             gyorsh: I think I finally see what you are concerned about:
+             Changing t.fun_tailrec_entry_point_label has effect on other
+             blocks, it's not local to the [block] that is passed as argument
+             to [replace_successor_labels].
 
              Suppose that there are two "Tailcall Self" sites in the
              function, say blocks L1 and L2 both have Tailcall Self as their
@@ -108,25 +101,15 @@ let replace_successor_labels t ~normal ~exn block ~f =
              not on L2 we get an inconsistent CFG, as there is only one
              tailrec entry point.
 
-             Changing t.fun_tailrec_entry_point_label has effect on other
-             blocks, it's not local to the [block] that is passed as argument
-             to replace_successor_labels. So how do we guarantee that all
-             other blocks that refer to t.fun_tailrec_entry_point_label are
-             updated?
+             How do we guarantee that all other blocks that refer to
+             t.fun_tailrec_entry_point_label are updated?
 
-             The reason is that if a block terminates with tailcall self,
-             then its successor is the block at
+             [replace_successor_labels] is only used in eliminate
+             fallthrough, where it is called on all predecessors of a block
+             that is a fallthrough block. If a predecessor block terminates
+             with tailcall self, then its successor is the block at
              t.fun_tailrec_entry_point_label and the tailrec entry point
-             block has as its predecessors *all* the "tailcall self" blocks.
-             We currently call replace_successor_labels on all successors of
-             a block that is a fallthrough block.
-
-             The bottom line is that it is correct currently, but
-             replace_successor_labels is very specific to eliminate
-             fallthrough. Perhaps it is better to move it back to
-             disconnect_block.ml ?
-
-             mshinwell: I would leave it for now but make this a CR-soon *)
+             block has as its predecessors *all* the "tailcall self" blocks. *)
           t.fun_tailrec_entry_point_label <-
             f t.fun_tailrec_entry_point_label;
           block.terminator.desc

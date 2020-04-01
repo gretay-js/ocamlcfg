@@ -4,47 +4,48 @@ module C = Cfg
 module L = Linear
 module T = Trap_stack.Make (Label)
 
-(* CR mshinwell: The comments in the following type seem to be inconsistent
+(* XCR mshinwell: The comments in the following type seem to be inconsistent
    as to whether they come before or after the record field to which they
-   pertain.  The convention is that they should come after (normally this
+   pertain. The convention is that they should come after (normally this
    decision is left to the user, but the parsing rules for doc comments
    insist in this particular case). *)
 
 type t =
   { cfg : Cfg.t;
     mutable layout : Label.t list;
-    (* Labels added by cfg construction, except entry. Used for testing of
-       the mapping back to Linear IR. *)
     mutable new_labels : Label.Set.t;
-    (* All traps pushed in this function. Used to check that all trap handler
-       blocks (i.e., blocks that start with [Lentertrap] in Linear), have
-       is_trap_handler set, which is needed to convert them back to Linear
-       (and restore [Lentertrap]). *)
+        (** Labels added by cfg construction, except entry. Used for testing
+            of the mapping back to Linear IR. *)
     mutable trap_handlers : Label.Set.t;
-    (* Maps labels of blocks to trap handler stacks at the beginning of the
-       block. [cfg.block.trap_depth] can be derived from the corresponding
-       trap_stack, except when the block is dead and the trap stack is not
-       known, represented by None. *)
+        (** All traps pushed in this function. Used to check that all trap
+            handler blocks (i.e., blocks that start with [Lentertrap] in
+            Linear), have is_trap_handler set, which is needed to convert
+            them back to Linear (and restore [Lentertrap]). *)
+    trap_stacks : T.t Label.Tbl.t;
+        (** Maps labels of blocks to trap handler stacks at the beginning of
+            the block. [cfg.block.trap_depth] can be derived from the
+            corresponding trap_stack, except when the block is dead and the
+            trap stack is not known, represented by None. *)
     (* CR-soon gyorsh: The need for this is because we need to record
        trap_stack for a block that hasn't been created yet. If we change
        create_empty_block to get_or_create, then we don't need this hashtbl
        and will be able to store the trap_stacks directly within their nodes,
        but it is a major restructuring of create_blocks, which won't be
        needed when we split blocks to have only one stack each. *)
-    trap_stacks : T.t Label.Tbl.t;
-    (* Maps labels to trap stacks at each raise point. *)
-    (* CR-soon gyorsh: this won't be needed after block splitting, as it will be
-       uniquely determined by the top of the trap stack. *)
     exns : T.t list Label.Tbl.t;
+        (** Maps labels to trap stacks at each raise point in the
+            corresponding block. *)
+    (* CR-soon gyorsh: this won't be needed after block splitting, as it will
+       be uniquely determined by the top of the trap stack. *)
     interproc_handler : Label.t;
-    (* A fake label that represents the top of the trap stack on entry to
-       this function. *)
+        (** A fake label that represents the top of the trap stack on entry
+            to this function. *)
     mutable unresolved_traps_to_pop : T.t list
-    (* Collect trap stacks from [exns] that need to be propagated to the
-       exns successors of a block, but cannot be propagated yet, because
-       the top of these trap stacks is unresolved (i.e., the exns
-       successor block is not known). These trap stacks will become
-       resolved unless they are unreachable. *)
+        (** Collect trap stacks from [exns] that need to be propagated to the
+            exns successors of a block, but cannot be propagated yet, because
+            the top of these trap stacks is unresolved (i.e., the exns
+            successor block is not known). These trap stacks will become
+            resolved unless they are unreachable. *)
   }
 
 let create cfg =
@@ -174,21 +175,17 @@ let register_block t (block : C.basic_block) traps =
   Label.Set.iter
     (fun label -> record_traps t label traps)
     (C.successor_labels t.cfg ~normal:true ~exn:false block);
-  (* Update trap stacks of exns successors. For each trap stack [s] in [t.exns]:
-     The handler is the block identified by the label on the top of [s]. The
-     trap stack of the handler must be the same as (pop [s]). The difficulty
-     is that at this point the top of [s] might be unknown. Such trap stacks
-     are recorded and resolved at the end of the pass. *)
+  (* Update trap stacks of exns successors. For each trap stack [s] in
+     [t.exns]: The handler is the block identified by the label on the top of
+     [s]. The trap stack of the handler must be the same as (pop [s]). The
+     difficulty is that at this point the top of [s] might be unknown. Such
+     trap stacks are recorded and resolved at the end of the pass. *)
   ( match Label.Tbl.find_opt t.exns block.start with
   | None -> ()
   | Some ls ->
       t.unresolved_traps_to_pop <-
         resolve_traps_to_pop t ls @ t.unresolved_traps_to_pop );
   Label.Tbl.add t.cfg.blocks block.start block
-
-(* XCR gyorsh: This is not needed any more. Mach.operation_can_raise is used
-   instead. Remove after CRs inside are resolved.
-   mshinwell: removed *)
 
 let can_raise_terminator (i : C.terminator) =
   match i with
@@ -215,10 +212,10 @@ let check_traps t label (block : C.basic_block) =
       | exception T.Unresolved ->
           (* At the end of the cfg construction, some blocks may have
              unresolved trap stacks. All these blocks must be dead, i.e.,
-             unreachable from entry of the function. This check can be done as a
-             separate pass in dead block elimination. Here we need to keep track
-             of blocks with unresolved trap_stacks, because t.trap_stacks is
-             not available after cfg construction. *)
+             unreachable from entry of the function. This check can be done
+             as a separate pass in dead block elimination. Here we need to
+             keep track of blocks with unresolved trap_stacks, because
+             t.trap_stacks is not available after cfg construction. *)
           (* CR mshinwell: Except we're not keeping track of blocks with
              unresolved trap stacks, we're just marking them dead? *)
           block.dead <- true;
@@ -282,9 +279,13 @@ let check_and_register_traps t =
   (* propagate remaining trap stacks to handlers *)
   t.unresolved_traps_to_pop <-
     resolve_traps_to_pop t t.unresolved_traps_to_pop;
-  if List.compare_length_with t.unresolved_traps_to_pop 0 > 0 then
-    if !C.verbose then  (* CR mshinwell: Should this be a fatal error? *)
+  if List.compare_length_with t.unresolved_traps_to_pop 0 > 0 then (
+    if !C.verbose then
+      (* XCR mshinwell: Should this be a fatal error?
+
+         gyorsh: no, because of dead blocks.. *)
       Printf.printf "%d" (List.length t.unresolved_traps_to_pop);
+    Misc.fatal_error "Unresolved traps at the end of cfg construction" );
 
   (* check that trap stacks at the start of all blocks are resolved *)
   C.iter_blocks t.cfg ~f:(check_traps t);
@@ -318,9 +319,9 @@ let get_or_make_label t (insn : Linear.instruction) :
   match insn.desc with
   | Llabel label -> { label; insn }
   | Lend -> Misc.fatal_error "Unexpected end of function instead of label"
-  | Lprologue | Lop _ | Lreloadretaddr | Lreturn | Lbranch _
-  | Lcondbranch _ | Lcondbranch3 _ | Lswitch _ | Lentertrap
-  | Ladjust_trap_depth _ | Lpushtrap _ | Lpoptrap | Lraise _ ->
+  | Lprologue | Lop _ | Lreloadretaddr | Lreturn | Lbranch _ | Lcondbranch _
+  | Lcondbranch3 _ | Lswitch _ | Lentertrap | Ladjust_trap_depth _
+  | Lpushtrap _ | Lpoptrap | Lraise _ ->
       let label = Cmm.new_label () in
       t.new_labels <- Label.Set.add label t.new_labels;
       let insn = Linear.instr_cons (Llabel label) [||] [||] insn in
@@ -459,10 +460,8 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       let new_block = create_empty_block t start ~trap_depth ~traps in
       create_blocks t i.next new_block ~trap_depth ~traps
   | Lreturn ->
-      (* CR mshinwell: This needs a comment given that the conditional says
-         1 and the error says 0 (presumably due to the interproc handler)? *)
       if trap_depth <> 1 then
-        Misc.fatal_errorf "Trap depth is %d, but it must be 0 at Lreturn"
+        Misc.fatal_errorf "Trap depth is %d, but it must be 1 at Lreturn"
           trap_depth;
       add_terminator t block i Return ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
@@ -472,9 +471,9 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
          have a different try depth. Also, why do we not need to update
          trap_depths and traps here like for pop?
 
-         mshinwell: I don't think there's anything special about a raise
-         for Linearize; it may still add a trap adjustment. Think about this
-         some more...
+         mshinwell: I don't think there's anything special about a raise for
+         Linearize; it may still add a trap adjustment. Think about this some
+         more...
 
          gyorsh: it is now handled in register_block called from
          add_terminator. *)

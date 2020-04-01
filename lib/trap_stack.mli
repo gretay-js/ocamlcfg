@@ -32,30 +32,36 @@ module type S = sig
   (** Returns the representation of an unknown stack. *)
   val unknown : unit -> t
 
-  (* CR mshinwell: Add comments for [pop] and [push].  Harmonise the 
-     comments for [to_list_exn] and [top_exn] (one of them mentions only
-     [Unknown] whereas the other talks about an unknown label as well).
-     Likewise the comment for "unify" talks about "unknowns" but it isn't
-     exactly clear what this is referring to. *)
+  (* XCR mshinwell: Add comments for [pop] and [push]. Harmonise the comments
+     for [to_list_exn] and [top_exn] (one of them mentions only [Unknown]
+     whereas the other talks about an unknown label as well). Likewise the
+     comment for "unify" talks about "unknowns" but it isn't exactly clear
+     what this is referring to.
 
+     gyorsh: indeed, unknown labels are unknown here in the interface :) they
+     are an implementation detail. *)
+
+  (** [pop t] removes the top trap handler from the stack [t] and returns the
+      new stack. *)
   val pop : t -> t
 
+  (** [push t d] adds trap handler [d] on top of the stack [t] and returns
+      the resulting stack. *)
   val push : t -> d -> t
 
-  (** Returns a list representation of the stack [t], with the head of the list
-      representing the top of the stack. Raises [Unresolved] if [t] contains
-      any [Unknown]. *)
+  (** Returns a list representation of the stack [t], with the head of the
+      list representing the top of the stack. Raises [Unresolved] if any part
+      of [t] is [unknown]. *)
   val to_list_exn : t -> d list
 
   (** Returns the top of the stack [t], or [None] if [t] is empty. Raises
-      [Unresolved] if the top of [t] cannot be resolved, i.e., top of [t] is
-      Unknown or contains an unknown label. *)
+      [Unresolved] if the top of [t] is [unknown]. *)
   val top_exn : t -> d option
 
-  (** [unify s1 s2] fails if s1 and s2 do not agree on the known elements,
-      and resolves unknowns whenever possible, destructively modifying [s1]
-      and [s2]. Fails if the destructive update would create a cycle in the
-      data structure. *)
+  (** [unify s1 s2] fails if s1 and s2 do not agree and resolves [unknown]
+      parts of s1 and s2 whenever possible, destructively modifying [s1] and
+      [s2]. Fails if the destructive update would create a cycle in the data
+      structure. *)
   val unify : t -> t -> unit
 
   (* Debug printing *)
