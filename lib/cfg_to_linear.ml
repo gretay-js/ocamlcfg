@@ -114,9 +114,8 @@ let mk_float_cond ~lt ~eq ~gt ~uo =
   | true, true, true, false ->
       Misc.fatal_error "Encountered disjunction of conditions: [CFle; CFgt]"
   (* Any [CFle; CFgt] *)
-  (* CR gyorsh: remove assert? *)
-  (* CR-soon gyorsh: how to choose between equivalent representations:
-     [CFle;CFgt] [CFlt;CFge] [CFlt;CFeq;CFgt] *)
+  (* CR-someday gyorsh: if this case is reachable, how to choose between
+     equivalent representations: [CFle;CFgt] [CFlt;CFge] [CFlt;CFeq;CFgt] *)
   | false, true, true, false ->
       Misc.fatal_error "Encountered disjunction of conditions [CFlt; CFgt]"
   (* Any [CFlt; CFgt] *)
