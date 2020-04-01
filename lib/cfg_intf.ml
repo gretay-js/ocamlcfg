@@ -69,23 +69,21 @@ module S = struct
       ifnot : Label.t  (** if test is false goto [ifnot] label *)
     }
 
-  (* XCR mshinwell: It's not actually clear what [x] and [y] are... *)
-
   (** [int_test] represents all possible outcomes of a comparison between two
       integers. When [imm] field is [None], compare variables x and y,
       specified by the arguments of the enclosing [instruction]. When [imm]
       field is [Some n], compare variable x and immediate [n]. This
       corresponds to [Mach.Iinttest] and [Mach.Iinttest_imm] in the compiler. *)
   type int_test =
-    { lt : Label.t;  (** if x < y goto [lt] label *)
-      eq : Label.t;  (** if x = y goto [eq] label *)
-      gt : Label.t;  (** if x > y goto [gt] label *)
+    { lt : Label.t;  (** if x < y (resp. x < n) goto [lt] label *)
+      eq : Label.t;  (** if x = y (resp. x = n) goto [eq] label *)
+      gt : Label.t;  (** if x > y (resp. x > n) goto [gt] label *)
       is_signed : bool;
       imm : int option
     }
 
   (** [float_test] represents possible outcomes of comparison between
-      arguments x and y or type float. It is not enough to check "=,<,>"
+      arguments x and y of type float. It is not enough to check "=,<,>"
       because possible outcomes of comparison include "unordered" (see e.g.
       x86-64 emitter) when the arguments involve NaNs. *)
   type float_test =
@@ -113,23 +111,16 @@ module S = struct
     | Poptrap
     | Prologue
 
-  (* XCR mshinwell: Add an example to the first point that clarifies what
-     "tests of different types" are *)
-  (* XCR mshinwell: The "redundancy of labels" bullet point doesn't make
-     sense. Should it say "a test can lead" instead of "test leading"? *)
-  (* XCR mshinwell: There's at least one other redundancy too by the look of
-     it (Switch with every label the same vs. Always) *)
-
   (** Properties of the representation of successors:
 
       - Tests of different types are not mixed. For example, a test that
         compares between variables of type int cannot be combined with a
         float comparison in the same block terminator.
       - Total: all possible outcomes of a test have a defined target label
-      - Disjoint: at most one of the outcome of a test is true
+      - Disjoint: at most one of the outcomes of a test is true
       - Redundancy of labels: more than one outcome of test can lead to the
         same label
-      - Redundancy of representation of unconditional jump: all outcomes of a
+      - Redundancy of representation of unconditional jump: if all outcomes of a
         test lead to the same label, it can be represented as (Always l). For
         example, [Parity_test {true_=l;false_=l}] can be simplified to
         [(Always l)]. *)

@@ -124,7 +124,9 @@ let replace_successor_labels t ~normal ~exn block ~f =
              The bottom line is that it is correct currently, but
              replace_successor_labels is very specific to eliminate
              fallthrough. Perhaps it is better to move it back to
-             disconnect_block.ml ? *)
+             disconnect_block.ml ?
+
+             mshinwell: I would leave it for now but make this a CR-soon *)
           t.fun_tailrec_entry_point_label <-
             f t.fun_tailrec_entry_point_label;
           block.terminator.desc
