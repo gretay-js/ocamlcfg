@@ -216,8 +216,11 @@ let check_traps t label (block : C.basic_block) =
              as a separate pass in dead block elimination. Here we need to
              keep track of blocks with unresolved trap_stacks, because
              t.trap_stacks is not available after cfg construction. *)
-          (* CR mshinwell: Except we're not keeping track of blocks with
-             unresolved trap stacks, we're just marking them dead? *)
+          (* XCR mshinwell: Except we're not keeping track of blocks with
+             unresolved trap stacks, we're just marking them dead?
+
+             gyorsh: That's how we keep track of them. This flag is checked
+             in [eliminate_dead_blocks]. *)
           block.dead <- true;
           if !C.verbose then
             Printf.printf
