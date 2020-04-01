@@ -1,11 +1,6 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
-<<<<<<< HEAD
 module type D = sig
-=======
-module type D =
-sig
->>>>>>> 77c9d9e... CR
   type t
 
   val equal : t -> t -> bool
@@ -46,18 +41,6 @@ module Make (D : D) = struct
 
   and h = handler ref
 
-<<<<<<< HEAD
-  (* CR mshinwell for mshinwell: Re-read once cycle check implemented *)
-
-  (* XCR mshinwell: As per conversation, add fast check for cycles, with the
-     necessary identities on the nodes that require them. (Perhaps using
-     phys_equal might suffice for the identity, so long as the structure
-     being tested is mutable.) *)
-
-  (* XCR mshinwell: I suggest renaming Emp -> Empty (likewise for the .mli),
-     it isn't obvious from the outside what "emp" might mean *)
-=======
->>>>>>> 77c9d9e... CR
   and stack =
     | Empty
     | Unknown
