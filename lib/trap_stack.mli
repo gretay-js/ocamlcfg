@@ -1,5 +1,3 @@
-(* XCR mshinwell: Please add file header and an explanation of what this
-   module is doing (ideally with comments for each function below). *)
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 (* Mutable representation of a stack of handlers.
@@ -34,16 +32,20 @@ module type S = sig
   (** Returns the representation of an unknown stack. *)
   val unknown : unit -> t
 
+  (* CR mshinwell: Add comments for [pop] and [push].  Harmonise the 
+     comments for [to_list_exn] and [top_exn] (one of them mentions only
+     [Unknown] whereas the other talks about an unknown label as well).
+     Likewise the comment for "unify" talks about "unknowns" but it isn't
+     exactly clear what this is referring to. *)
+
   val pop : t -> t
 
   val push : t -> d -> t
 
-  (** Returns list representation of stack [t], with the head of the list
+  (** Returns a list representation of the stack [t], with the head of the list
       representing the top of the stack. Raises [Unresolved] if [t] contains
       any [Unknown]. *)
   val to_list_exn : t -> d list
-
-  (* XCR mshinwell: Document which is the "top" of the stack. *)
 
   (** Returns the top of the stack [t], or [None] if [t] is empty. Raises
       [Unresolved] if the top of [t] cannot be resolved, i.e., top of [t] is
@@ -63,5 +65,5 @@ module type S = sig
   val print_pair : string -> t -> t -> unit
 end
 
-(** Functor building stacks of *)
+(** Functor building stacks of handlers *)
 module Make (D : D) : S with type d = D.t

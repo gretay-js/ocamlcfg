@@ -1,6 +1,11 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
+<<<<<<< HEAD
 module type D = sig
+=======
+module type D =
+sig
+>>>>>>> 77c9d9e... CR
   type t
 
   val equal : t -> t -> bool
@@ -41,6 +46,7 @@ module Make (D : D) = struct
 
   and h = handler ref
 
+<<<<<<< HEAD
   (* CR mshinwell for mshinwell: Re-read once cycle check implemented *)
 
   (* XCR mshinwell: As per conversation, add fast check for cycles, with the
@@ -50,6 +56,8 @@ module Make (D : D) = struct
 
   (* XCR mshinwell: I suggest renaming Emp -> Empty (likewise for the .mli),
      it isn't obvious from the outside what "emp" might mean *)
+=======
+>>>>>>> 77c9d9e... CR
   and stack =
     | Empty
     | Unknown
@@ -152,7 +160,7 @@ module Make (D : D) = struct
 
   let link_h ~(src : h) ~(dst : h) =
     assert (!src = Unknown);
-    (* check that there is no path from dst to link. it guarantees that the
+    (* check that there is no path from dst to src. it guarantees that the
        link from src to dst that we install is not going to close a cycle,
        which will cause non-termination of other operations on the stack. *)
     let rec loop cur =
@@ -180,7 +188,7 @@ module Make (D : D) = struct
 
   let link ~(src : t) ~(dst : t) =
     assert (!src = Unknown);
-    (* check that there is no path from dst to link. it guarantees that the
+    (* check that there is no path from dst to src. it guarantees that the
        link from src to dst that we install is not going to close a cycle,
        which will cause non-termination of other operations on the stack. *)
     let rec loop cur =
