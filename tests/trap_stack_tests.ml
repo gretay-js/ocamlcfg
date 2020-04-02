@@ -1,13 +1,11 @@
-(* CR-gyorsh: currently these tests are not run, they need to move into the
-   library, because trap_stack is not visible from outside ocamlcfg library. *)
-(* CR mshinwell: Add file header *)
-
-(* CR mshinwell: Make these into expect tests? *)
+(* CR-someday gyorsh: currently these tests are not run, they need to move
+   into the library, because trap_stack is not visible from outside ocamlcfg
+   library. *)
+(* CR-someday mshinwell: Make these into expect tests? *)
 
 open Trap_stack
 
-(* CR mshinwell for mshinwell: Read after the trap stack cycle detection has
-   been implemented. *)
+(* CR-someday mshinwell for mshinwell: Read if this comes into use. *)
 
 let () =
   try

@@ -81,15 +81,12 @@ let mk_int_test ~lt ~eq ~gt : Cmm.integer_comparison =
   | true, true, true -> assert false
   | false, false, false -> assert false
 
-(* XCR mshinwell: Is this second paragraph still correct given that we've
-   removed the special "last" handling? *)
-
 (* Certain "unordered" outcomes of float comparisons are not expressible as a
    single Cmm.float_comparison operator, or a disjunction of disjoint
    Cmm.float_comparison operators. For example, for float_test { lt = L0; eq
    = L0; gt = L0; uo = L1 } there is no Mach comparison for the branch to L1.
 
-   We haven't seen a program that leads to it yet, but it is possibly that
+   We haven't seen a program that leads to it yet, but it is possible that
    future transformations will. So, for now these cases are fatal error. If
    we need to handle them, if needed, we can emit an unconditional jump that
    appears last, after all other conditional jumps. *)

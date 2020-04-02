@@ -32,15 +32,6 @@ module type S = sig
   (** Returns the representation of an unknown stack. *)
   val unknown : unit -> t
 
-  (* XCR mshinwell: Add comments for [pop] and [push]. Harmonise the comments
-     for [to_list_exn] and [top_exn] (one of them mentions only [Unknown]
-     whereas the other talks about an unknown label as well). Likewise the
-     comment for "unify" talks about "unknowns" but it isn't exactly clear
-     what this is referring to.
-
-     gyorsh: indeed, unknown labels are unknown here in the interface :) they
-     are an implementation detail. *)
-
   (** [pop t] removes the top trap handler from the stack [t] and returns the
       new stack. *)
   val pop : t -> t

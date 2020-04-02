@@ -4,12 +4,6 @@ module C = Cfg
 module L = Linear
 module T = Trap_stack.Make (Label)
 
-(* XCR mshinwell: The comments in the following type seem to be inconsistent
-   as to whether they come before or after the record field to which they
-   pertain. The convention is that they should come after (normally this
-   decision is left to the user, but the parsing rules for doc comments
-   insist in this particular case). *)
-
 type t =
   { cfg : Cfg.t;
     mutable layout : Label.t list;
@@ -214,13 +208,10 @@ let check_traps t label (block : C.basic_block) =
              unresolved trap stacks. All these blocks must be dead, i.e.,
              unreachable from entry of the function. This check can be done
              as a separate pass in dead block elimination. Here we need to
-             keep track of blocks with unresolved trap_stacks, because
-             t.trap_stacks is not available after cfg construction. *)
-          (* XCR mshinwell: Except we're not keeping track of blocks with
-             unresolved trap stacks, we're just marking them dead?
-
-             gyorsh: That's how we keep track of them. This flag is checked
-             in [eliminate_dead_blocks]. *)
+             keep track of blocks with unresolved trap stacks, because
+             [t.trap_stacks] is not available after cfg construction.  This
+             is done by marking them [dead] and checking that flag in
+             [eliminate_dead_blocks]. *)
           block.dead <- true;
           if !C.verbose then
             Printf.printf
@@ -283,10 +274,7 @@ let check_and_register_traps t =
   t.unresolved_traps_to_pop <-
     resolve_traps_to_pop t t.unresolved_traps_to_pop;
   if List.compare_length_with t.unresolved_traps_to_pop 0 > 0 then (
-    if !C.verbose then
-      (* XCR mshinwell: Should this be a fatal error?
-
-         gyorsh: no, because of dead blocks.. *)
+    if !C.verbose then  (* not a fatal error because of dead blocks *)
       Printf.printf "%d" (List.length t.unresolved_traps_to_pop);
     Misc.fatal_error "Unresolved traps at the end of cfg construction" );
 
