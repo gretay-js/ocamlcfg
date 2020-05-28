@@ -209,8 +209,8 @@ let check_traps t label (block : C.basic_block) =
              unreachable from entry of the function. This check can be done
              as a separate pass in dead block elimination. Here we need to
              keep track of blocks with unresolved trap stacks, because
-             [t.trap_stacks] is not available after cfg construction.  This
-             is done by marking them [dead] and checking that flag in
+             [t.trap_stacks] is not available after cfg construction. This is
+             done by marking them [dead] and checking that flag in
              [eliminate_dead_blocks]. *)
           block.dead <- true;
           if !C.verbose then
@@ -274,7 +274,8 @@ let check_and_register_traps t =
   t.unresolved_traps_to_pop <-
     resolve_traps_to_pop t t.unresolved_traps_to_pop;
   if List.compare_length_with t.unresolved_traps_to_pop 0 > 0 then (
-    if !C.verbose then  (* not a fatal error because of dead blocks *)
+    if !C.verbose then
+      (* not a fatal error because of dead blocks *)
       Printf.printf "%d" (List.length t.unresolved_traps_to_pop);
     Misc.fatal_error "Unresolved traps at the end of cfg construction" );
 
@@ -391,8 +392,9 @@ let to_basic (mop : Mach.operation) : C.basic =
           | Ilsl | Ilsr | Iasr | Icomp _ ) as op ),
         i ) ->
       Op (Intop_imm (op, i))
-  | Ialloc { bytes; label_after_call_gc; spacetime_index } ->
-      Call (P (Alloc { bytes; label_after_call_gc; spacetime_index }))
+  | Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index } ->
+      Call
+        (P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }))
   | Istackoffset i -> Op (Stackoffset i)
   | Iload (c, a) -> Op (Load (c, a))
   | Istore (c, a, b) -> Op (Store (c, a, b))

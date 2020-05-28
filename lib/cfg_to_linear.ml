@@ -34,8 +34,9 @@ let from_basic (basic : Cfg.basic) : L.instruction_desc =
           { immediate = Some i; label_after_error; spacetime_index })) ->
       Lop
         (Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i))
-  | Call (P (Alloc { bytes; label_after_call_gc; spacetime_index })) ->
-      Lop (Ialloc { bytes; label_after_call_gc; spacetime_index })
+  | Call (P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }))
+    ->
+      Lop (Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index })
   | Op op ->
       let op : Mach.operation =
         match op with
