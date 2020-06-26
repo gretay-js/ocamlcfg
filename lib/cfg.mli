@@ -36,7 +36,7 @@ type basic_block =
         (** This block must be unreachable from function entry. This field is
             set during cfg construction (if trap stacks are unresolved) and
             used during dead block elimination for checking. *)
-        (* CR-soon gyorsh: The current implementation allows multiple
+        (* CR-someday gyorsh: The current implementation allows multiple
            pushtraps in each block means that different trap stacks are
            associated with the block at different points, and a raise from
            this block can go to different handlers, depending on which one is
@@ -69,10 +69,10 @@ val fun_tailrec_entry_point_label : t -> Label.t
 
 val predecessor_labels : basic_block -> Label.t list
 
-(** [exn] does not account for exceptional flow from the block that goes
-    outside of the function. *)
 val successor_labels :
   t -> normal:bool -> exn:bool -> basic_block -> Label.Set.t
+(** [exn] does not account for exceptional flow from the block that goes
+    outside of the function. *)
 
 val replace_successor_labels :
   t ->
@@ -101,8 +101,8 @@ val print_terminator :
 
 val print_basic : out_channel -> basic instruction -> unit
 
-(* CR-soon gyorsh: Current version of cfg is a half-way house in terms of its
-   exception handling. It has a lot of redundancy and the result of the
+(* CR-someday gyorsh: Current version of cfg is a half-way house in terms of
+   its exception handling. It has a lot of redundancy and the result of the
    computation is not used.
 
    Redundancy: linear_to_cfg reconstructs intraprocedural exception handling
@@ -114,4 +114,5 @@ val print_basic : out_channel -> basic instruction -> unit
    every push/poptrap. Then, we can annotate the blocks with the top of the
    trap stack, instead of carrying the copy of the stack. *)
 
-(* CR-soon gyorsh: store label after separately and update after reordering. *)
+(* CR-someday gyorsh: store label after separately and update after
+   reordering. *)

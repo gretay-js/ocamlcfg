@@ -3,13 +3,13 @@
 module C = Cfg
 module CL = Cfg_with_layout
 
-(* CR-soon gyorsh: Eliminate dead cycles. *)
+(* CR-someday gyorsh: Eliminate dead cycles. *)
 let block_is_dead cfg_with_layout (block : C.basic_block) =
   let cfg = CL.cfg cfg_with_layout in
   Label.Set.is_empty block.predecessors
-  (* CR-soon gyorsh: Predecessors already contains all live handlers. Remove
-     is_trap_handler check when CFG is updated to use trap stacks instead of
-     pushtrap/poptrap instructions in CFG. *)
+  (* CR-someday gyorsh: Predecessors already contains all live handlers.
+     Remove is_trap_handler check when CFG is updated to use trap stacks
+     instead of pushtrap/poptrap instructions in CFG. *)
   && (not block.is_trap_handler)
   && not (Label.equal cfg.entry_label block.start)
 

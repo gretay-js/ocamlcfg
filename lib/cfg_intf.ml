@@ -24,6 +24,7 @@ module S = struct
     | Alloc of
         { bytes : int;
           label_after_call_gc : Label.t option;
+          dbginfo : Debuginfo.alloc_dbginfo;
           spacetime_index : int
         }
     | Checkbound of
@@ -120,10 +121,10 @@ module S = struct
       - Disjoint: at most one of the outcomes of a test is true
       - Redundancy of labels: more than one outcome of test can lead to the
         same label
-      - Redundancy of representation of unconditional jump: if all outcomes of a
-        test lead to the same label, it can be represented as (Always l). For
-        example, [Parity_test {true_=l;false_=l}] can be simplified to
-        [(Always l)]. *)
+      - Redundancy of representation of unconditional jump: if all outcomes
+        of a test lead to the same label, it can be represented as (Always
+        l). For example, [Parity_test {true_=l;false_=l}] can be simplified
+        to [(Always l)]. *)
   type terminator =
     | Never
     | Always of Label.t
@@ -133,8 +134,8 @@ module S = struct
     | Int_test of int_test
     | Switch of Label.t array
     | Return
-    | Raise of Cmm.raise_kind
+    | Raise of Lambda.raise_kind
     | Tailcall of tail_call_operation
 end
 
-(* CR-soon gyorsh: Switch can be translated to Branch. *)
+(* CR-someday gyorsh: Switch can be translated to Branch. *)

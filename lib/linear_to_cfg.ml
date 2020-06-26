@@ -20,7 +20,7 @@ type t =
             the block. [cfg.block.trap_depth] can be derived from the
             corresponding trap_stack, except when the block is dead and the
             trap stack is not known, represented by None. *)
-    (* CR-soon gyorsh: The need for this is because we need to record
+    (* CR-someday gyorsh: The need for this is because we need to record
        trap_stack for a block that hasn't been created yet. If we change
        create_empty_block to get_or_create, then we don't need this hashtbl
        and will be able to store the trap_stacks directly within their nodes,
@@ -29,8 +29,8 @@ type t =
     exns : T.t list Label.Tbl.t;
         (** Maps labels to trap stacks at each raise point in the
             corresponding block. *)
-    (* CR-soon gyorsh: this won't be needed after block splitting, as it will
-       be uniquely determined by the top of the trap stack. *)
+    (* CR-someday gyorsh: this won't be needed after block splitting, as it
+       will be uniquely determined by the top of the trap stack. *)
     interproc_handler : Label.t;
         (** A fake label that represents the top of the trap stack on entry
             to this function. *)
@@ -53,16 +53,16 @@ let create cfg =
     unresolved_traps_to_pop = []
   }
 
-(* CR-soon gyorsh: implement CFG traversal *)
+(* CR-someday gyorsh: implement CFG traversal *)
 
-(* CR-soon gyorsh: abstraction of cfg updates that transparently and
+(* CR-someday gyorsh: abstraction of cfg updates that transparently and
    efficiently keeps predecessors and successors in sync. For example, change
    successors relation should automatically updates the predecessors relation
    without recomputing them from scratch. *)
 
-(* CR-soon gyorsh: Optimize terminators. Implement switch as jump table or as
-   a sequence of branches depending on perf counters and layout. It should be
-   implemented as a separate transformation on the cfg, that needs to be
+(* CR-someday gyorsh: Optimize terminators. Implement switch as jump table or
+   as a sequence of branches depending on perf counters and layout. It should
+   be implemented as a separate transformation on the cfg, that needs to be
    informated by the layout, but it should not be done while emitting linear.
    This way we can keep to_linear as simple as possible to ensure basic
    invariants are preserved, while other optimizations can be turned on and
@@ -209,8 +209,8 @@ let check_traps t label (block : C.basic_block) =
              unreachable from entry of the function. This check can be done
              as a separate pass in dead block elimination. Here we need to
              keep track of blocks with unresolved trap stacks, because
-             [t.trap_stacks] is not available after cfg construction.  This
-             is done by marking them [dead] and checking that flag in
+             [t.trap_stacks] is not available after cfg construction. This is
+             done by marking them [dead] and checking that flag in
              [eliminate_dead_blocks]. *)
           block.dead <- true;
           if !C.verbose then
@@ -274,7 +274,8 @@ let check_and_register_traps t =
   t.unresolved_traps_to_pop <-
     resolve_traps_to_pop t t.unresolved_traps_to_pop;
   if List.compare_length_with t.unresolved_traps_to_pop 0 > 0 then (
-    if !C.verbose then  (* not a fatal error because of dead blocks *)
+    if !C.verbose then
+      (* not a fatal error because of dead blocks *)
       Printf.printf "%d" (List.length t.unresolved_traps_to_pop);
     Misc.fatal_error "Unresolved traps at the end of cfg construction" );
 
@@ -391,8 +392,9 @@ let to_basic (mop : Mach.operation) : C.basic =
           | Ilsl | Ilsr | Iasr | Icomp _ ) as op ),
         i ) ->
       Op (Intop_imm (op, i))
-  | Ialloc { bytes; label_after_call_gc; spacetime_index } ->
-      Call (P (Alloc { bytes; label_after_call_gc; spacetime_index }))
+  | Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index } ->
+      Call
+        (P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }))
   | Istackoffset i -> Op (Stackoffset i)
   | Iload (c, a) -> Op (Load (c, a))
   | Istore (c, a, b) -> Op (Store (c, a, b))
@@ -447,7 +449,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
         let fallthrough : C.terminator = Always start in
         block.terminator <- create_instruction fallthrough i ~trap_depth;
         register_block t block traps );
-      (* CR-soon gyorsh: check for multiple consecutive labels *)
+      (* CR-someday gyorsh: check for multiple consecutive labels *)
       let new_block = create_empty_block t start ~trap_depth ~traps in
       create_blocks t i.next new_block ~trap_depth ~traps
   | Lreturn ->
@@ -457,7 +459,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       add_terminator t block i Return ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
   | Lraise kind ->
-      (* CR-soon gyorsh: Why does the compiler not generate adjust after
+      (* CR-someday gyorsh: Why does the compiler not generate adjust after
          raise? raise pops the trap handler stack and then the next block may
          have a different try depth. Also, why do we not need to update
          trap_depths and traps here like for pop?
@@ -505,7 +507,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       add_terminator t block i (Int_test it) ~trap_depth ~traps;
       create_blocks t fallthrough.insn block ~trap_depth ~traps
   | Lswitch labels ->
-      (* CR-soon gyorsh: get rid of switches entirely and re-generate them
+      (* CR-someday gyorsh: get rid of switches entirely and re-generate them
          based on optimization and perf data? *)
       add_terminator t block i (Switch labels) ~trap_depth ~traps;
       create_blocks t i.next block ~trap_depth ~traps
@@ -594,7 +596,7 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
     in
     create cfg
   in
-  (* CR-soon gyorsh: label of the function entry must not conflict with
+  (* CR-someday gyorsh: label of the function entry must not conflict with
      existing labels. Relies on the invariant: Cmm.new_label() is int > 99.
      An alternative is to create a new type for label here, but it is less
      efficient because label is used as a key to Label.Tbl. mshinwell: I

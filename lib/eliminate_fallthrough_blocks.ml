@@ -21,7 +21,7 @@ let is_fallthrough_block cfg_with_layout (block : C.basic_block) =
       else Some target_label
     else None
 
-(* CR-soon mshinwell: The logic below looks similar in structure to
+(* CR-someday mshinwell: The logic below looks similar in structure to
    [Eliminate_dead_blocks]. I think it would be worth trying to factor that
    out (into a functor) -- this would presumably form the starting point for
    a generic traversal / rewrite mechanism in the future. *)

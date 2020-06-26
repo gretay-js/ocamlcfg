@@ -84,11 +84,11 @@ let replace_successor_labels t ~normal ~exn block ~f =
           Float_test { lt = f lt; eq = f eq; gt = f gt; uo = f uo }
       | Switch labels -> Switch (Array.map f labels)
       | Tailcall (Self _) ->
-          (* CR-soon gyorsh: If there is no [Tailcall Self] then we won't
+          (* CR-someday gyorsh: If there is no [Tailcall Self] then we won't
              affect [t.fun_tailrec_entry_point_label]. Maybe this case should
              do nothing and [fun_tailrec_entry_point_label] should
              unilaterally be updated earlier in this function? *)
-          (* CR-soon gyorsh: Move replace_successor_labels back to
+          (* CR-someday gyorsh: Move replace_successor_labels back to
              disconnect_block.ml ?
 
              Changing t.fun_tailrec_entry_point_label has effect on other

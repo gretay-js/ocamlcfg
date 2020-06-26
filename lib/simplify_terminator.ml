@@ -50,7 +50,7 @@ let simplify_switch (block : C.basic_block) labels =
       block.terminator <- { block.terminator with desc }
   | _ -> ()
 
-(* CR-soon gyorsh: merge (Lbranch | Lcondbranch | Lcondbranch3)+ into a
+(* CR-someday gyorsh: merge (Lbranch | Lcondbranch | Lcondbranch3)+ into a
    single terminator when the argments are the same. Enables reordering of
    branch instructions and save cmp instructions. The main problem is that it
    involves boolean combination of conditionals of type Mach.test that can

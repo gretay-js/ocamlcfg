@@ -34,8 +34,9 @@ let from_basic (basic : Cfg.basic) : L.instruction_desc =
           { immediate = Some i; label_after_error; spacetime_index })) ->
       Lop
         (Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i))
-  | Call (P (Alloc { bytes; label_after_call_gc; spacetime_index })) ->
-      Lop (Ialloc { bytes; label_after_call_gc; spacetime_index })
+  | Call (P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }))
+    ->
+      Lop (Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index })
   | Op op ->
       let op : Mach.operation =
         match op with
@@ -121,12 +122,12 @@ let mk_float_cond ~lt ~eq ~gt ~uo =
 
 let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
     ~(next : Linear_utils.labelled_insn) =
-  (* CR-soon gyorsh: refactor, a lot of redundant code for different cases *)
-  (* CR-soon gyorsh: for successor labels that are not fallthrough, order of
-     branch instructions should depend on perf data and possibly the relative
-     position of the target labels and the current block: whether the jumps
-     are forward or back. This information can be obtained from the layout.
-     For now, we are making an arbitrary choice. *)
+  (* CR-someday gyorsh: refactor, a lot of redundant code for different cases *)
+  (* CR-someday gyorsh: for successor labels that are not fallthrough, order
+     of branch instructions should depend on perf data and possibly the
+     relative position of the target labels and the current block: whether
+     the jumps are forward or back. This information can be obtained from the
+     layout. For now, we are making an arbitrary choice. *)
   (* If one of the successors is a fallthrough label, do not emit a jump for
      it. Otherwise, the last jump is unconditional. *)
   let branch_or_fallthrough lbl =
@@ -193,7 +194,7 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
                     Label.Set.min_elt successor_labels
               | [lbl] ->
                   Printf.eprintf "One success label must be last: %d\n" lbl;
-                  (* CR-soon gyorsh: fail for safety, until we see a case
+                  (* CR-someday gyorsh: fail for safety, until we see a case
                      that exhibits this behavior.. This behavior should not
                      be possible with the current cfg construction. *)
                   Misc.fatal_errorf
@@ -286,7 +287,7 @@ let need_starting_label (cfg_with_layout : CL.t) (block : Cfg.basic_block)
            immediately prior to this block. *)
         (* No need for the label, unless the predecessor's terminator is
            [Switch] when the label is needed for the jump table. *)
-        (* CR-soon gyorsh: is this correct with label_after for calls? *)
+        (* CR-someday gyorsh: is this correct with label_after for calls? *)
         match prev_block.terminator.desc with
         | Switch _ -> true
         | Never -> Misc.fatal_error "Cannot linearize terminator: Never"
@@ -309,7 +310,7 @@ let adjust_trap_depth body (block : Cfg.basic_block)
     let delta_traps = block_trap_depth - prev_trap_depth in
     to_linear_instr (Ladjust_trap_depth { delta_traps }) ~next:body
 
-(* CR-soon gyorsh: handle duplicate labels in new layout: print the same
+(* CR-someday gyorsh: handle duplicate labels in new layout: print the same
    block more than once. *)
 let run cfg_with_layout =
   let cfg = CL.cfg cfg_with_layout in
