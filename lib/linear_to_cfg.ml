@@ -395,6 +395,9 @@ let to_basic (mop : Mach.operation) : C.basic =
   | Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index } ->
       Call
         (P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }))
+  | Iprobe { name; handler_code_sym } ->
+      Op (Probe { name; handler_code_sym })
+  | Iprobe_is_enabled { name } -> Op (Probe_is_enabled { name })
   | Istackoffset i -> Op (Stackoffset i)
   | Iload (c, a) -> Op (Load (c, a))
   | Istore (c, a, b) -> Op (Store (c, a, b))
@@ -582,7 +585,8 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       | Istore (_, _, _)
       | Ialloc _ | Iintop _
       | Iintop_imm (_, _)
-      | Ispecific _ | Iname_for_debugger _ ->
+      | Iprobe _ | Iprobe_is_enabled _ | Ispecific _ | Iname_for_debugger _
+        ->
           let desc = to_basic mop in
           block.body <- create_instruction desc i ~trap_depth :: block.body;
           if Mach.operation_can_raise mop then record_exn t block traps;
