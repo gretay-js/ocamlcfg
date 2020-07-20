@@ -43,3 +43,7 @@ module Util = struct
 
   let print_assembly = Cfg_to_linear.print_assembly
 end
+
+module Analysis = struct
+  include Data_flow_analysis
+end
