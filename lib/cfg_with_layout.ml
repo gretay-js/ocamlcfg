@@ -49,15 +49,16 @@ let print t oc msg =
   Printf.fprintf oc "blocks.length=%d\n" (Label.Tbl.length t.cfg.blocks);
   let print_block label =
     let block = Label.Tbl.find t.cfg.blocks label in
-    Printf.fprintf oc "\n%d:\n" label;
+    Printf.fprintf oc "\nBB %d:\n" label;
+    Printf.fprintf oc "--------\n";
     List.iter (Cfg.print_basic oc) block.body;
     Cfg.print_terminator oc block.terminator;
-    Printf.fprintf oc "\npredecessors:";
+    Printf.fprintf oc "\n  predecessors:";
     Label.Set.iter (Printf.fprintf oc " %d") block.predecessors;
-    Printf.fprintf oc "\nsuccessors:";
+    Printf.fprintf oc "\n  successors:";
     Label.Set.iter (Printf.fprintf oc " %d")
       (Cfg.successor_labels ~normal:true ~exn:false t.cfg block);
-    Printf.fprintf oc "\nexn-successors:";
+    Printf.fprintf oc "\n  exn-successors:";
     Label.Set.iter (Printf.fprintf oc " %d")
       (Cfg.successor_labels ~normal:false ~exn:true t.cfg block)
   in
