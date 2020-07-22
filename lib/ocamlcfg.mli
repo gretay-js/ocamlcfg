@@ -3,7 +3,9 @@
 [@@@ocaml.warning "+a-30-40-41-42"]
 
 module Label : sig
-  type t = int
+  include module type of struct
+    include Label
+  end
 end
 
 module Cfg : sig
@@ -27,12 +29,18 @@ module Cfg : sig
 
   val iter_blocks : t -> f:(Label.t -> Basic_block.t -> unit) -> unit
 
+  val blocks : t -> Basic_block.t list
+
   val get_block : t -> Label.t -> Basic_block.t option
+
+  val get_block_exn : t -> Label.t -> Basic_block.t
 
   (** [successor_labels] only returns non-exceptional edges. We need to pass
       [t] because the successor label of terminator (Tailcall Self) is
       recorded in [t], and not in the basic_block. *)
   val successor_labels : t -> Basic_block.t -> Label.t list
+
+  val all_successor_labels : t -> Basic_block.t -> Label.t list
 
   val predecessor_labels : Basic_block.t -> Label.t list
 
@@ -41,6 +49,14 @@ module Cfg : sig
   val entry_label : t -> Label.t
 
   val fun_tailrec_entry_point_label : t -> Label.t
+
+  val print_terminator
+    :  out_channel
+    -> ?sep:string
+    -> terminator instruction
+    -> unit
+
+  val print_basic : out_channel -> basic instruction -> unit
 end
 
 module Cfg_with_layout : sig
@@ -94,7 +110,7 @@ module Analysis : sig
   end
 
   module ReachingSpills : sig
-    val solve : Cfg.t -> (Label.t, Spill.Set.t) Hashtbl.t
+    val solve : Cfg.t -> ((Label.t * int), Spill.Set.t) Hashtbl.t
   end
 
   module Dominators : sig

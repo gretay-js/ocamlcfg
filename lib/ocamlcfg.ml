@@ -15,6 +15,9 @@ module Cfg = struct
     let terminator t = t.terminator
   end
 
+  let all_successor_labels t b =
+    successor_labels t ~normal:true ~exn:true b |> Label.Set.elements
+
   let successor_labels t b =
     successor_labels t ~normal:true ~exn:false b |> Label.Set.elements
 end

@@ -4,7 +4,7 @@ include module type of struct
 end
 
 module ReachingSpills : sig
-  val solve : Cfg.t -> (Label.t, Spill.Set.t) Hashtbl.t
+  val solve : Cfg.t -> ((Label.t * int), Spill.Set.t) Hashtbl.t
 end
 
 module Dominators : sig

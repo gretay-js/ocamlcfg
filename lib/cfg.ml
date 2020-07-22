@@ -146,6 +146,8 @@ let set_fun_tailrec_entry_point_label t label =
 
 let iter_blocks t ~f = Label.Tbl.iter f t.blocks
 
+let blocks t = List.map snd (Label.Tbl.to_list t.blocks)
+
 (* Printing for debug *)
 
 (* The next 2 functions are copied almost as is from asmcomp/printmach.ml
@@ -216,9 +218,26 @@ let print_call oc = function
       | Direct { func_symbol : string; _ } ->
           Printf.fprintf oc "direct %s" func_symbol )
 
+let print_reg oc r =
+  let name = if Reg.anonymous r then "" else Reg.name r in
+  let ty =
+    match r.Reg.typ with
+    | Val -> "V"
+    | Addr -> "A"
+    | Int -> "I"
+    | Float -> "F"
+  in
+  Printf.fprintf oc "(%s:%s/%d " name ty r.stamp;
+  match r.loc with
+  | Unknown -> ()
+  | Reg r -> Printf.fprintf oc "[%s])" (Proc.register_name r)
+  | Stack(Local s) -> Printf.fprintf oc "[s%i])" s
+  | Stack(Incoming s) -> Printf.fprintf oc "[si%i])" s
+  | Stack(Outgoing s) -> Printf.fprintf oc "[so%i])" s
+
 let print_basic oc i =
   Printf.fprintf oc "%d: " i.id;
-  match i.desc with
+  (match i.desc with
   | Op op -> print_op oc op
   | Call call ->
       Printf.fprintf oc "Call ";
@@ -227,7 +246,10 @@ let print_basic oc i =
   | Pushtrap { lbl_handler } ->
       Printf.fprintf oc "Pushtrap handler=%d" lbl_handler
   | Poptrap -> Printf.fprintf oc "Poptrap"
-  | Prologue -> Printf.fprintf oc "Prologue"
+  | Prologue -> Printf.fprintf oc "Prologue");
+  Array.iter (Printf.fprintf oc " %a" print_reg) i.arg;
+  Printf.fprintf oc " ->";
+  Array.iter (Printf.fprintf oc " %a" print_reg) i.res
 
 let print_terminator oc ?(sep = "\n") ti =
   Printf.fprintf oc "%d: " ti.id;

@@ -94,6 +94,8 @@ val set_fun_tailrec_entry_point_label : t -> Label.t -> unit
 
 val iter_blocks : t -> f:(Label.t -> basic_block -> unit) -> unit
 
+val blocks : t -> basic_block list
+
 (** Printing *)
 
 val print_terminator :

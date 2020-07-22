@@ -49,20 +49,21 @@ let print t oc msg =
   Printf.fprintf oc "blocks.length=%d\n" (Label.Tbl.length t.cfg.blocks);
   let print_block label =
     let block = Label.Tbl.find t.cfg.blocks label in
-    Printf.fprintf oc "\nBB %d:\n" label;
-    Printf.fprintf oc "--------\n";
-    List.iter (Cfg.print_basic oc) block.body;
+    Printf.fprintf oc "\n%d:\n" label;
+    List.iter (fun inst -> Printf.fprintf oc "  %a\n" Cfg.print_basic inst) block.body;
+    Printf.fprintf oc "  ";
     Cfg.print_terminator oc block.terminator;
-    Printf.fprintf oc "\n  predecessors:";
+    Printf.fprintf oc "\npredecessors:";
     Label.Set.iter (Printf.fprintf oc " %d") block.predecessors;
-    Printf.fprintf oc "\n  successors:";
+    Printf.fprintf oc "\nsuccessors:";
     Label.Set.iter (Printf.fprintf oc " %d")
       (Cfg.successor_labels ~normal:true ~exn:false t.cfg block);
-    Printf.fprintf oc "\n  exn-successors:";
+    Printf.fprintf oc "\nexn-successors:";
     Label.Set.iter (Printf.fprintf oc " %d")
       (Cfg.successor_labels ~normal:false ~exn:true t.cfg block)
   in
-  List.iter print_block t.layout
+  List.iter print_block t.layout;
+  Printf.fprintf oc "\n"
 
 let print_dot t ?(show_instr = true) ?(show_exn = true) ?annotate_block
     ?annotate_succ oc =

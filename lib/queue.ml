@@ -1,5 +1,5 @@
 
-type 'a t = ('a list * 'a list)
+type 'a t = 'a list * 'a list
 
 let empty = ([], [])
 
@@ -11,3 +11,5 @@ let pop = function
     match List.rev back with
     | [] -> None
     | x :: back' -> Some (x, (back', []))
+
+let length (front, back) = List.length front + List.length back

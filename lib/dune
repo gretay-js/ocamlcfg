@@ -6,7 +6,6 @@
       eliminate_dead_blocks
       linear_utils
       cfg
-      data_flow_analysis_intf
       eliminate_fallthrough_blocks
       cfg_to_linear
       extra_debug
@@ -15,7 +14,6 @@
       trap_stack
       disconnect_block
       linear_to_cfg
-      label
   )
  (libraries
   compiler-libs.common)
