@@ -1,18 +1,21 @@
 include Data_flow_analysis_intf.S
 
 module type Problem = sig
+  module S : sig
+    type t
+    val equal : t -> t -> bool
+    val lub : t -> t -> t
+    val top : t
+  end
+
   type t
-  type v
-  type node = Label.t
+  type node
 
   val init : Cfg.t -> t
   val entries : t -> node list
   val next : t -> node -> node list
   val prev : t -> node -> node list
-  val f : t -> node -> v -> v
-  val top : t -> node -> v
-  val compare : v -> v -> int
-  val lub : v -> v -> v
+  val f : t -> node -> S.t -> S.t
 end
 
 module Make_solver (P: Problem) = struct
@@ -27,16 +30,16 @@ module Make_solver (P: Problem) = struct
         let nodes_prev = P.prev t n in
         let sols_prev = List.map (fun node ->
           try Hashtbl.find solution node
-          with Not_found -> P.top t node) nodes_prev
+          with Not_found -> P.S.top) nodes_prev
         in
         let sol_prev =
           match sols_prev with
-          | [] -> P.top t n
-          | s :: ss -> List.fold_left P.lub s ss
+          | [] -> P.S.top
+          | s :: ss -> List.fold_left P.S.lub s ss
         in
         let sol_node = P.f t n sol_prev in
         match Hashtbl.find solution n with
-        | sol_old when P.compare sol_old sol_node = 0 ->
+        | sol_old when P.S.equal sol_old sol_node ->
           fixpoint q
         | _
         | exception Not_found ->
@@ -58,7 +61,7 @@ let cfg_fwd_prev cfg node =
 
 module IntSet = Set.Make(struct
   type t = int
-  let compare = Stdlib.compare
+  let compare x y = x - y
 end)
 
 let get_spill_slot inst =
@@ -72,6 +75,12 @@ let get_spill_slot inst =
     None
 
 module ReachingSpillsProblem = struct
+  module S = struct
+    include Spill.Set
+    let lub = Spill.Set.union
+    let top = Spill.Set.empty
+  end
+
   type kg =
     { gen: Spill.Set.t
     ; kill: IntSet.t
@@ -80,7 +89,6 @@ module ReachingSpillsProblem = struct
     { cfg: Cfg.t
     ; kill_gen: (Label.t, kg) Hashtbl.t
     }
-  type v = Spill.Set.t
   type node = Label.t
 
   let init cfg =
@@ -116,10 +124,6 @@ module ReachingSpillsProblem = struct
       v
     in
     Spill.Set.union gen not_killed
-
-  let lub = Spill.Set.union
-  let top _cfg _node = Spill.Set.empty
-  let compare = Spill.Set.compare
 end
 
 module ReachingSpills = struct
@@ -157,8 +161,13 @@ module ReachingSpills = struct
 end
 
 module DominatorsProblem = struct
+  module S = struct
+    include Dom.Set
+    let lub = Dom.Set.union
+    let top = Dom.Set.empty
+  end
+
   type t = Cfg.t
-  type v = Dom.Set.t
   type node = Label.t
 
   let init cfg = cfg
@@ -167,10 +176,6 @@ module DominatorsProblem = struct
   let prev = cfg_fwd_prev
 
   let f _cfg node v = Dom.Set.add node v
-
-  let lub = Dom.Set.inter
-  let top _cfg node = Dom.Set.singleton node
-  let compare = Dom.Set.compare
 end
 
 module Dominators = struct
