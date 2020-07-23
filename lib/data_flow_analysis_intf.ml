@@ -45,7 +45,6 @@ module S = struct
 
     val start_node : t -> Parent.t -> Node.t
     val next_node : t -> Parent.t -> Node.t -> Node.t option
-    val prev_node : t -> Parent.t -> Node.t -> Node.t option
 
     val kg : t -> Parent.t -> Node.t -> KillGen.t
   end

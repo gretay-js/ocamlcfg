@@ -37,21 +37,22 @@ module Make_solver (P: Problem) = struct
       | Some (n, q) ->
         let nodes_prev = P.prev t n in
         let sols_prev = List.map (fun node ->
-          try Map.find node solution
+          try snd (Map.find node solution)
           with Not_found -> P.S.top) nodes_prev
         in
-        let sol_prev =
+        let sol_in =
           match sols_prev with
           | [] -> P.S.top
           | s :: ss -> List.fold_left P.S.lub s ss
         in
-        let sol_node = P.f t n sol_prev in
+        let sol_out = P.f t n sol_in in
         match Map.find n solution with
-        | sol_old when P.S.equal sol_old sol_node ->
+        | (sol_in', sol_out')
+          when P.S.equal sol_in' sol_in && P.S.equal sol_out' sol_out ->
           fixpoint solution q
         | _
         | exception Not_found ->
-          let solution' = Map.add n sol_node solution in
+          let solution' = Map.add n (sol_in, sol_out) solution in
           fixpoint solution' (List.fold_left Q.push q (P.next t n))
     in
     fixpoint P.Node.Map.empty q
@@ -102,14 +103,7 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
     let parent_solution = Parent_solver.solve { T.pt; T.kill_gens } in
     T.Node.Map.fold
       (fun parent _ solution ->
-        let sols_in =
-          List.map (fun prev -> T.Node.Map.find prev parent_solution) (P.prev pt parent)
-        in
-        let sol_in =
-          match sols_in with
-          | [] -> P.S.top
-          | s :: ss -> List.fold_left P.S.lub s ss
-        in
+        let sol_in, _ = T.Node.Map.find parent parent_solution in
         let rec advance parent node solution sol =
           let solution' = P.Node.Map.add node sol solution in
           match P.next_node pt parent node with
@@ -126,15 +120,6 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
       parent_solution ParentMap.empty
 end
 
-let cfg_fwd_next cfg node =
-  let block = Cfg.get_block_exn cfg node in
-  let next = Cfg.successor_labels cfg ~normal:true ~exn:true block in
-  Label.Set.elements next
-
-let cfg_fwd_prev cfg node =
-  let block = Cfg.get_block_exn cfg node in
-  Cfg.predecessor_labels block
-
 module DominatorsProblem = struct
   module S = struct
     include Dom.Set
@@ -147,12 +132,21 @@ module DominatorsProblem = struct
   type t = Cfg.t
 
   let entries cfg = [Cfg.entry_label cfg]
-  let next = cfg_fwd_next
-  let prev = cfg_fwd_prev
+
+  let next cfg node =
+    let block = Cfg.get_block_exn cfg node in
+    let next = Cfg.successor_labels cfg ~normal:true ~exn:true block in
+    Label.Set.elements next
+
+  let prev cfg node =
+    let block = Cfg.get_block_exn cfg node in
+    Cfg.predecessor_labels block
 
   let f _cfg node v = Dom.Set.add node v
 end
 
 module Dominators = struct
-  include Make_solver(DominatorsProblem)
+  let solve cfg =
+    let module DominatorsSolver = Make_solver(DominatorsProblem) in
+    Label.Map.map snd (DominatorsSolver.solve cfg)
 end

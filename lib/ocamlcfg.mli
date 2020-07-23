@@ -110,7 +110,7 @@ module Analysis : sig
   end
 
   module Make_solver (P: Problem) : sig
-    val solve : P.t -> P.S.t P.Node.Map.t
+    val solve : P.t -> (P.S.t * P.S.t) P.Node.Map.t
   end
 
   module Dominators : sig
