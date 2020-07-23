@@ -1,35 +1,43 @@
 include Data_flow_analysis_intf.S
 
-module type Problem = sig
-  module S : sig
-    type t
-    val equal : t -> t -> bool
-    val lub : t -> t -> t
-    val top : t
-  end
-
+module Make_queue (T: Identifiable.S) : sig
   type t
-  type node
+  val empty : t
+  val push : t -> T.t -> t
+  val pop : t -> (T.t * t) option
+end = struct
+  type t = T.t list * T.t list * T.Set.t
 
-  val init : Cfg.t -> t
-  val entries : t -> node list
-  val next : t -> node -> node list
-  val prev : t -> node -> node list
-  val f : t -> node -> S.t -> S.t
+  let empty = ([], [], T.Set.empty)
+
+  let push q x =
+    let front, back, set = q in
+    if T.Set.mem x set then q
+    else (front, x :: back, T.Set.add x set)
+
+  let pop = function
+    | (x :: front, back, set) ->
+      Some (x, (front, back, T.Set.remove x set))
+    | ([], back, set) ->
+      match List.rev back with
+      | [] -> None
+      | x :: back' ->
+        Some (x, (back', [], T.Set.remove x set))
 end
 
 module Make_solver (P: Problem) = struct
-  let solve_bb cfg =
-    let t = P.init cfg in
-    let q = List.fold_left Queue.push Queue.empty (P.entries t) in
-    let solution = Hashtbl.create 10 in
-    let rec fixpoint q =
-      match Queue.pop q with
+  module Q = Make_queue(P.Node)
+
+  let solve t =
+    let module Map = P.Node.Map in
+    let q = List.fold_left Q.push Q.empty (P.entries t) in
+    let rec fixpoint solution q =
+      match Q.pop q with
       | None -> solution
       | Some (n, q) ->
         let nodes_prev = P.prev t n in
         let sols_prev = List.map (fun node ->
-          try Hashtbl.find solution node
+          try Map.find node solution
           with Not_found -> P.S.top) nodes_prev
         in
         let sol_prev =
@@ -38,16 +46,84 @@ module Make_solver (P: Problem) = struct
           | s :: ss -> List.fold_left P.S.lub s ss
         in
         let sol_node = P.f t n sol_prev in
-        match Hashtbl.find solution n with
+        match Map.find n solution with
         | sol_old when P.S.equal sol_old sol_node ->
-          fixpoint q
+          fixpoint solution q
         | _
         | exception Not_found ->
-          Hashtbl.remove solution n;
-          Hashtbl.add solution n sol_node;
-          fixpoint (List.fold_left Queue.push q (P.next t n))
+          let solution' = Map.add n sol_node solution in
+          fixpoint solution' (List.fold_left Q.push q (P.next t n))
     in
-    fixpoint q
+    fixpoint P.Node.Map.empty q
+end
+
+module Make_kill_gen_solver (P: KillGenProblem) = struct
+  module ParentMap = P.Parent.Map
+
+  module T = struct
+    module S = P.S
+    module Node = P.Parent
+
+    type t =
+      { pt: P.t
+      ; kill_gens: P.KillGen.t ParentMap.t
+      }
+
+    let entries { pt; _ } = P.entries pt
+    let next { pt; _ } = P.next pt
+    let prev { pt; _ } = P.prev pt
+
+    let f { kill_gens; _ } n sol =
+      P.KillGen.f sol (ParentMap.find n kill_gens)
+  end
+
+  module Parent_solver = Make_solver(T)
+
+  let solve pt =
+    let kill_gens =
+      (* Compute per-block kill-gen info by composing child nodes. *)
+      let rec advance parent node kg =
+        match P.next_node pt parent node with
+        | None -> kg
+        | Some node' ->
+          let kg' = P.kg pt parent node' in
+          advance parent node' (P.KillGen.dot kg' kg)
+      in
+      let rec dfs kill_gens parent =
+        if ParentMap.mem parent kill_gens then kill_gens
+        else
+          let start = P.start_node pt parent in
+          let kg = advance parent start (P.kg pt parent start) in
+          let kill_gens' = ParentMap.add parent kg kill_gens in
+          List.fold_left dfs kill_gens' (P.next pt parent)
+      in
+      List.fold_left dfs ParentMap.empty (P.entries pt)
+    in
+    let parent_solution = Parent_solver.solve { T.pt; T.kill_gens } in
+    T.Node.Map.fold
+      (fun parent _ solution ->
+        let sols_in =
+          List.map (fun prev -> T.Node.Map.find prev parent_solution) (P.prev pt parent)
+        in
+        let sol_in =
+          match sols_in with
+          | [] -> P.S.top
+          | s :: ss -> List.fold_left P.S.lub s ss
+        in
+        let rec advance parent node solution sol =
+          let solution' = P.Node.Map.add node sol solution in
+          match P.next_node pt parent node with
+          | None -> solution'
+          | Some node' ->
+            let kg = P.kg pt parent node in
+            let sol' = P.KillGen.f sol kg in
+            advance parent node' solution' sol'
+        in
+        let block_sol =
+          advance parent (P.start_node pt parent) P.Node.Map.empty sol_in
+        in
+        ParentMap.add parent block_sol solution)
+      parent_solution ParentMap.empty
 end
 
 let cfg_fwd_next cfg node =
@@ -59,107 +135,6 @@ let cfg_fwd_prev cfg node =
   let block = Cfg.get_block_exn cfg node in
   Cfg.predecessor_labels block
 
-module IntSet = Set.Make(struct
-  type t = int
-  let compare x y = x - y
-end)
-
-let get_spill_slot inst =
-  let open Cfg in
-  match inst.desc with
-  | Op Spill ->
-    (match inst.res with
-    | [| { Reg.loc = Reg.Stack (Reg.Local n); _ } |] -> Some n
-    | _ -> failwith "invalid spill")
-  | _ ->
-    None
-
-module ReachingSpillsProblem = struct
-  module S = struct
-    include Spill.Set
-    let lub = Spill.Set.union
-    let top = Spill.Set.empty
-  end
-
-  type kg =
-    { gen: Spill.Set.t
-    ; kill: IntSet.t
-    }
-  type t =
-    { cfg: Cfg.t
-    ; kill_gen: (Label.t, kg) Hashtbl.t
-    }
-  type node = Label.t
-
-  let init cfg =
-    let kill_gen = Hashtbl.create 10 in
-    Cfg.iter_blocks cfg ~f:(fun block bb ->
-      let kg = List.fold_left
-        (fun kg inst ->
-          match get_spill_slot inst with
-          | None -> kg
-          | Some stack_slot ->
-            let spill = { Spill.block; inst = inst.id; stack_slot } in
-            let reachable_spills =
-              Spill.Set.filter (fun spill -> spill.stack_slot <> stack_slot) kg.gen
-            in
-            { kill = IntSet.add stack_slot kg.kill
-            ; gen = Spill.Set.add spill reachable_spills
-            })
-        { gen =  Spill.Set.empty; kill = IntSet.empty }
-        bb.body
-      in
-      Hashtbl.add kill_gen block kg
-    );
-    { cfg; kill_gen }
-
-  let entries { cfg; _ } = [Cfg.entry_label cfg]
-  let next { cfg; _ } node = cfg_fwd_next cfg node
-  let prev { cfg; _ } node = cfg_fwd_prev cfg node
-
-  let f { kill_gen; _ } node v =
-    let { gen; kill } = Hashtbl.find kill_gen node in
-    let not_killed = Spill.Set.filter
-      (fun { stack_slot; _ } -> not (IntSet.mem stack_slot kill))
-      v
-    in
-    Spill.Set.union gen not_killed
-end
-
-module ReachingSpills = struct
-  include Make_solver(ReachingSpillsProblem)
-
-  let solve cfg =
-    let inst_sol = Hashtbl.create 10 in
-    let bb_sol = solve_bb cfg in
-    (* After solving at the block level, compute reachable sets for
-       individual instructions in each block *)
-    Cfg.iter_blocks cfg ~f:(fun block bb ->
-      match List.map (Hashtbl.find bb_sol) (cfg_fwd_prev cfg block) with
-      | sols_in ->
-        let sol_in = List.fold_left Spill.Set.union (Spill.Set.empty) sols_in in
-        ignore (List.fold_left
-          (fun spills_in inst ->
-            let spills_out =
-              match get_spill_slot inst with
-              | None -> spills_in
-              | Some stack_slot ->
-                let spill = { Spill.block; inst = inst.id; stack_slot } in
-                let reachable_spills =
-                  Spill.Set.filter
-                    (fun spills -> spills.stack_slot <> stack_slot)
-                    spills_in
-                in
-                Spill.Set.add spill reachable_spills
-            in
-            Hashtbl.add inst_sol (block, inst.id) spills_out;
-            spills_out)
-          sol_in bb.body)
-      | exception Not_found ->
-        ());
-    inst_sol
-end
-
 module DominatorsProblem = struct
   module S = struct
     include Dom.Set
@@ -167,10 +142,10 @@ module DominatorsProblem = struct
     let top = Dom.Set.empty
   end
 
-  type t = Cfg.t
-  type node = Label.t
+  module Node = Label
 
-  let init cfg = cfg
+  type t = Cfg.t
+
   let entries cfg = [Cfg.entry_label cfg]
   let next = cfg_fwd_next
   let prev = cfg_fwd_prev
@@ -180,5 +155,4 @@ end
 
 module Dominators = struct
   include Make_solver(DominatorsProblem)
-  let solve = solve_bb
 end
