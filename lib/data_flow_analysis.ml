@@ -38,7 +38,7 @@ module Make_solver (P: Problem) = struct
         let nodes_prev = P.prev t n in
         let sols_prev = List.map (fun node ->
           try snd (Map.find node solution)
-          with Not_found -> P.S.top) nodes_prev
+          with Not_found -> P.init t node) nodes_prev
         in
         let sol_in =
           match sols_prev with
@@ -73,6 +73,7 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
     let entries { pt; _ } = P.entries pt
     let next { pt; _ } = P.next pt
     let prev { pt; _ } = P.prev pt
+    let init { pt; _ } = P.init pt
 
     let f { kill_gens; _ } n sol =
       P.KillGen.f sol (ParentMap.find n kill_gens)
@@ -123,7 +124,7 @@ end
 module DominatorsProblem = struct
   module S = struct
     include Dom.Set
-    let lub = Dom.Set.union
+    let lub = Dom.Set.inter
     let top = Dom.Set.empty
   end
 
@@ -141,6 +142,10 @@ module DominatorsProblem = struct
   let prev cfg node =
     let block = Cfg.get_block_exn cfg node in
     Cfg.predecessor_labels block
+
+  let init cfg node =
+    if node = Cfg.entry_label cfg then Dom.Set.singleton node
+    else Dom.Set.of_list (List.map (fun bb -> bb.Cfg.start) (Cfg.blocks cfg))
 
   let f _cfg node v = Dom.Set.add node v
 end
