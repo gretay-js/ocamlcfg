@@ -1,6 +1,6 @@
 include Data_flow_analysis_intf.S
 
-module Make_queue (T: Identifiable.S) : sig
+module Make_queue (T: Node_id) : sig
   type t
   val empty : t
   val push : t -> T.t -> t
@@ -25,7 +25,9 @@ end = struct
         Some (x, (back', [], T.Set.remove x set))
 end
 
-module Make_solver (P: Problem) = struct
+module Make_solver (P: Problem) : sig
+  val solve : P.t -> (P.S.t * P.S.t) P.Node.Map.t
+end = struct
   module Q = Make_queue(P.Node)
 
   let solve t =
@@ -58,16 +60,18 @@ module Make_solver (P: Problem) = struct
     fixpoint P.Node.Map.empty q
 end
 
-module Make_kill_gen_solver (P: KillGenProblem) = struct
+module Make_kill_gen_solver (P: KillGenProblem) : sig
+  val solve : P.t -> (P.K.S.t P.Node.Map.t) P.Parent.Map.t
+end = struct
   module ParentMap = P.Parent.Map
 
   module T = struct
-    module S = P.S
+    module S = P.K.S
     module Node = P.Parent
 
     type t =
       { pt: P.t
-      ; kill_gens: P.KillGen.t ParentMap.t
+      ; kill_gens: P.K.t ParentMap.t
       }
 
     let entries { pt; _ } = P.entries pt
@@ -76,7 +80,7 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
     let init { pt; _ } = P.init pt
 
     let f { kill_gens; _ } n sol =
-      P.KillGen.f sol (ParentMap.find n kill_gens)
+      P.K.f sol (ParentMap.find n kill_gens)
   end
 
   module Parent_solver = Make_solver(T)
@@ -89,7 +93,7 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
         | None -> kg
         | Some node' ->
           let kg' = P.kg pt parent node' in
-          advance parent node' (P.KillGen.dot kg' kg)
+          advance parent node' (P.K.dot kg' kg)
       in
       let rec dfs kill_gens parent =
         if ParentMap.mem parent kill_gens then kill_gens
@@ -101,7 +105,9 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
       in
       List.fold_left dfs ParentMap.empty (P.entries pt)
     in
-    let parent_solution = Parent_solver.solve { T.pt; T.kill_gens } in
+    let parent_solution =
+      Parent_solver.solve { T.pt; T.kill_gens }
+    in
     T.Node.Map.fold
       (fun parent _ solution ->
         let sol_in, _ = T.Node.Map.find parent parent_solution in
@@ -111,7 +117,7 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
           | None -> solution'
           | Some node' ->
             let kg = P.kg pt parent node in
-            let sol' = P.KillGen.f sol kg in
+            let sol' = P.K.f sol kg in
             advance parent node' solution' sol'
         in
         let block_sol =
@@ -119,6 +125,104 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
         in
         ParentMap.add parent block_sol solution)
       parent_solution ParentMap.empty
+end
+
+let cfg_next cfg node =
+  let block = Cfg.get_block_exn cfg node in
+  let next = Cfg.successor_labels cfg ~normal:true ~exn:true block in
+  Label.Set.elements next
+
+let cfg_prev cfg node =
+  let block = Cfg.get_block_exn cfg node in
+  Cfg.predecessor_labels block
+
+module Make_forward_cfg_solver (P: CfgKillGenProblem) : sig
+  val solve : P.t -> (P.K.S.t Inst_id.Map.t) Label.Map.t
+end = struct
+  module T = struct
+    module S = P.K.S
+    module K = P.K
+
+    module Parent = Label
+    module Node = Inst_id
+
+    type t = P.t
+
+    let entries t = [Cfg.entry_label (P.cfg t)]
+
+    let next t = cfg_next (P.cfg t)
+    let prev t = cfg_prev (P.cfg t)
+
+    let start_node t block =
+      let bb = Cfg.get_block_exn (P.cfg t) block in
+      match bb.body with
+      | [] -> Node.Term
+      | _ -> Node.Inst 0
+
+    let next_node t block = function
+      | Node.Term -> None
+      | Node.Inst n ->
+        let bb = Cfg.get_block_exn (P.cfg t) block in
+        if n + 1 = List.length bb.body then Some Node.Term
+        else Some (Node.Inst (n + 1))
+
+    let init = P.init
+    let kg = P.kg
+  end
+
+  include Make_kill_gen_solver(T)
+end
+
+module Make_backward_cfg_solver (P: CfgKillGenProblem) : sig
+  val solve : P.t -> (P.K.S.t Inst_id.Map.t) Label.Map.t
+end = struct
+  module T = struct
+    module S = P.K.S
+    module K = P.K
+
+    module Parent = Label
+    module Node = Inst_id
+
+    type t = P.t
+
+    let entries t =
+      let open Cfg in
+      blocks (P.cfg t)
+      |> List.filter (fun block ->
+        match block.terminator.desc with
+        | Never
+        | Return
+        | Tailcall _ -> true
+        | Always _
+        | Parity_test _
+        | Truth_test _
+        | Float_test _
+        | Int_test _
+        | Switch _
+        | _ -> false)
+      |> List.map (fun block -> block.start)
+
+    let next t = cfg_prev (P.cfg t)
+    let prev t = cfg_next (P.cfg t)
+
+    let start_node _ _ = Node.Term
+
+    let next_node t block = function
+      | Node.Term ->
+        let bb = Cfg.get_block_exn (P.cfg t) block in
+        (match bb.body with
+        | [] -> None
+        | insts -> Some (Node.Inst (List.length insts - 1)))
+      | Node.Inst 0 ->
+        None
+      | Node.Inst n ->
+        Some (Node.Inst (n - 1))
+
+    let init = P.init
+    let kg = P.kg
+  end
+
+  include Make_kill_gen_solver(T)
 end
 
 module DominatorsProblem = struct
@@ -134,14 +238,8 @@ module DominatorsProblem = struct
 
   let entries cfg = [Cfg.entry_label cfg]
 
-  let next cfg node =
-    let block = Cfg.get_block_exn cfg node in
-    let next = Cfg.successor_labels cfg ~normal:true ~exn:true block in
-    Label.Set.elements next
-
-  let prev cfg node =
-    let block = Cfg.get_block_exn cfg node in
-    Cfg.predecessor_labels block
+  let next = cfg_next
+  let prev = cfg_prev
 
   let init cfg node =
     if node = Cfg.entry_label cfg then Dom.Set.singleton node

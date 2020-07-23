@@ -113,6 +113,30 @@ module Analysis : sig
     val solve : P.t -> (P.S.t * P.S.t) P.Node.Map.t
   end
 
+  module Make_kill_gen_solver (P: KillGenProblem) : sig
+    (* Functor to build a solver for a kill-gen problem. *)
+    val solve : P.t -> (P.K.S.t P.Node.Map.t) P.Parent.Map.t
+  end
+
+  module type CfgKillGenProblem = sig
+    module K : KillGen
+
+    type t
+    val cfg : t -> Cfg.t
+    val init : t -> Label.t -> K.S.t
+    val kg : t -> Label.t -> Inst_id.t -> K.t
+  end
+
+  module Make_forward_cfg_solver (P: CfgKillGenProblem) : sig
+    (* Functor to build a forward solver on the cfg. *)
+    val solve : P.t -> (P.K.S.t Inst_id.Map.t) Label.Map.t
+  end
+
+  module Make_backward_cfg_solver (P: CfgKillGenProblem) : sig
+    (* Functor to build a backward solver on the cfg. *)
+    val solve : P.t -> (P.K.S.t Inst_id.Map.t) Label.Map.t
+  end
+
   module Dominators : sig
     val solve : Cfg.t -> Dom.Set.t Label.Map.t
   end
