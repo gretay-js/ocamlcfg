@@ -311,7 +311,12 @@ let print_terminator oc ?(sep = "\n") ti =
   | Tailcall (Func _) -> Printf.fprintf oc "Tailcall%s" sep
 
 
-(* This duplicates logic for Proc for the amd64 backend. *)
+(*
+ * This duplicates logic for Proc for the amd64 backend.
+ * Proc.mli could expose some of the register sets (all_phys_regs,
+ * destroyed_at_c_call) and offer a separate method for clobbers
+ * of primitive operations common between Mach and Linear.
+ *)
 
 let rax = 0
 let rdx = 4
