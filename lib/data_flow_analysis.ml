@@ -121,14 +121,14 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
     T.Node.Map.fold
       (fun parent _ solution ->
         let sol_in, _ = T.Node.Map.find parent parent_solution in
-        let rec advance node solution sol_out =
+        let rec advance node solution sol_in =
           let kg = P.kg pt node in
-          let sol_in = P.K.f sol_out kg in
+          let sol_out = P.K.f sol_in kg in
           let solution' = P.Node.Map.add node (sol_in, sol_out) solution in
           match P.next_node pt node with
           | None -> solution'
           | Some node' ->
-            advance node' solution' sol_in
+            advance node' solution' sol_out
         in
         advance (P.start_node pt parent) solution sol_in)
       parent_solution P.Node.Map.empty
