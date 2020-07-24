@@ -5,7 +5,6 @@ module S = struct
 
     val equal : t -> t -> bool
     val lub : t -> t -> t
-    val top : t
     (* Outgoing value from nodes with no predecessors *)
   end
 
@@ -28,7 +27,7 @@ module S = struct
     val next : t -> Node.t -> Node.t list
     val prev : t -> Node.t -> Node.t list
 
-    val init : t -> Node.t -> S.t
+    val init : t -> Node.t -> S.t * S.t
     val f : t -> Node.t -> S.t -> S.t
   end
 
@@ -47,7 +46,11 @@ module S = struct
     module K : KillGen
 
     module Parent : Node_id
-    module Node : Node_id
+
+    module Node : sig
+      include Node_id
+      val parent : t -> Parent.t
+    end
 
     type t
 
@@ -57,25 +60,38 @@ module S = struct
     val prev : t -> Parent.t -> Parent.t list
 
     val start_node : t -> Parent.t -> Node.t
-    val next_node : t -> Parent.t -> Node.t -> Node.t option
+    val next_node : t -> Node.t -> Node.t option
 
-    val init : t -> Parent.t -> K.S.t
-    val kg : t -> Parent.t -> Node.t -> K.t
+    val init : t -> Parent.t -> K.S.t * K.S.t
+    val kg : t -> Node.t -> K.t
   end
 
   (* Identifier for an instruction in the cfg. *)
   module Inst_id = struct
     module T = struct
       type t
-        = Inst of int
-        | Term
+        = Inst of Label.t * int
+        | Term of Label.t
 
       let compare a b =
         match a, b with
-        | Term, Term -> 0
-        | Term, Inst _ -> -1
-        | Inst _, Term -> 1
-        | Inst a', Inst b' -> a' - b'
+        | Term la, Term lb -> Label.compare la lb
+        | Term la, Inst (lb, _) ->
+          (match Label.compare la lb with
+          | 0 -> 1
+          | c -> c)
+        | Inst (la, _), Term lb ->
+          (match Label.compare la lb with
+          | 0 -> -1
+          | c -> c)
+        | Inst (la, ia), Inst (lb, ib) ->
+          match Label.compare la lb with
+          | 0 -> ia - ib
+          | c -> c
+
+      let parent = function
+        | Inst(p, _) -> p
+        | Term p -> p
     end
 
     include T
@@ -90,8 +106,8 @@ module S = struct
     type t
     val cfg : t -> Cfg.t
 
-    val init : t -> Label.t -> K.S.t
-    val kg : t -> Label.t -> Inst_id.t -> K.t
+    val init : t -> Label.t -> K.S.t * K.S.t
+    val kg : t -> Inst_id.t -> K.t
   end
 
   module Dom = struct

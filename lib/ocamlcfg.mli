@@ -50,6 +50,12 @@ module Cfg : sig
 
   val fun_tailrec_entry_point_label : t -> Label.t
 
+  val is_exit : terminator -> bool
+
+  val destroyed_at_instruction : basic -> int array array
+
+  val destroyed_at_terminator : terminator -> int array array
+
   val print_terminator
     :  out_channel
     -> ?sep:string
@@ -115,7 +121,7 @@ module Analysis : sig
 
   module Make_kill_gen_solver (P: KillGenProblem) : sig
     (* Functor to build a solver for a kill-gen problem. *)
-    val solve : P.t -> (P.K.S.t P.Node.Map.t) P.Parent.Map.t
+    val solve : P.t -> (P.K.S.t * P.K.S.t) P.Node.Map.t
   end
 
   module type CfgKillGenProblem = sig
@@ -123,18 +129,18 @@ module Analysis : sig
 
     type t
     val cfg : t -> Cfg.t
-    val init : t -> Label.t -> K.S.t
-    val kg : t -> Label.t -> Inst_id.t -> K.t
+    val init : t -> Label.t -> K.S.t * K.S.t
+    val kg : t -> Inst_id.t -> K.t
   end
 
   module Make_forward_cfg_solver (P: CfgKillGenProblem) : sig
     (* Functor to build a forward solver on the cfg. *)
-    val solve : P.t -> (P.K.S.t Inst_id.Map.t) Label.Map.t
+    val solve : P.t -> (P.K.S.t * P.K.S.t) Inst_id.Map.t
   end
 
   module Make_backward_cfg_solver (P: CfgKillGenProblem) : sig
     (* Functor to build a backward solver on the cfg. *)
-    val solve : P.t -> (P.K.S.t Inst_id.Map.t) Label.Map.t
+    val solve : P.t -> (P.K.S.t * P.K.S.t) Inst_id.Map.t
   end
 
   module Dominators : sig

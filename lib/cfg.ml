@@ -133,7 +133,46 @@ let get_block_exn t label =
 
 let fun_name t = t.fun_name
 
+let is_exit = function
+  | Never
+  | Return
+  | Tailcall _ -> true
+  | Always _
+  | Parity_test _
+  | Truth_test _
+  | Float_test _
+  | Int_test _
+  | Switch _
+  | Raise _ -> false
+
+(* This duplicates logic for proc for the amd64 backend. *)
+let destroyed_at_instruction = function
+  | Op _ -> failwith "op"
+  | Call _ -> failwith "call"
+  | Reloadretaddr -> failwith "reloadretaddr"
+  | Pushtrap _ -> failwith "pushtrap"
+  | Poptrap -> failwith "poptrap"
+  | Prologue -> failwith "prologue"
+
+let destroyed_at_terminator = function
+  | Never -> failwith "Never"
+  | Always _ -> failwith "Always"
+  | Parity_test _ -> failwith "Parity"
+  | Truth_test _ -> failwith "Truth"
+  | Float_test _ -> failwith "Float"
+  | Int_test _ -> failwith "Int"
+  | Switch _ -> failwith "Switch"
+  | Return -> failwith "Return"
+  | Raise _ -> failwith "Raise"
+  | Tailcall _ -> failwith "Tailcall"
+
 let entry_label t = t.entry_label
+
+let exit_labels t =
+  Label.Tbl.to_list t.blocks
+  |> List.filter (fun (_, block) -> is_exit block.terminator.desc)
+  |> List.map fst
+  |> Label.Set.of_list
 
 let fun_tailrec_entry_point_label t = t.fun_tailrec_entry_point_label
 
@@ -252,7 +291,11 @@ let print_basic oc i =
   Array.iter (Printf.fprintf oc " %a" print_reg) i.res
 
 let print_terminator oc ?(sep = "\n") ti =
-  Printf.fprintf oc "%d: " ti.id;
+  Printf.fprintf oc "%d:" ti.id;
+  Array.iter (Printf.fprintf oc " %a" print_reg) ti.arg;
+  Printf.fprintf oc " ->";
+  Array.iter (Printf.fprintf oc " %a" print_reg) ti.res;
+  Printf.fprintf oc "%s" sep;
   match ti.desc with
   | Never -> Printf.fprintf oc "deadend%s" sep
   | Always l -> Printf.fprintf oc "goto %d%s" l sep
@@ -287,3 +330,4 @@ let print_terminator oc ?(sep = "\n") ti =
   | Raise _ -> Printf.fprintf oc "Raise%s" sep
   | Tailcall (Self _) -> Printf.fprintf oc "Tailcall self%s" sep
   | Tailcall (Func _) -> Printf.fprintf oc "Tailcall%s" sep
+

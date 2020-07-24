@@ -63,7 +63,19 @@ val create : fun_name:string -> fun_tailrec_entry_point_label:Label.t -> t
 
 val fun_name : t -> string
 
+(** Properties of instructions *)
+
+val is_exit : terminator -> bool
+
+val destroyed_at_instruction : basic -> int array array
+
+val destroyed_at_terminator : terminator -> int array array
+
+(** Graph traversal *)
+
 val entry_label : t -> Label.t
+
+val exit_labels : t -> Label.Set.t
 
 val fun_tailrec_entry_point_label : t -> Label.t
 
