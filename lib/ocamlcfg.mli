@@ -52,9 +52,9 @@ module Cfg : sig
 
   val is_exit : terminator -> bool
 
-  val destroyed_at_instruction : basic -> int array array
+  val destroyed_at_instruction : basic -> int array
 
-  val destroyed_at_terminator : terminator -> int array array
+  val destroyed_at_terminator : terminator -> int array
 
   val print_terminator
     :  out_channel

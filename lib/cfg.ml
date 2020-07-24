@@ -145,27 +145,6 @@ let is_exit = function
   | Switch _
   | Raise _ -> false
 
-(* This duplicates logic for proc for the amd64 backend. *)
-let destroyed_at_instruction = function
-  | Op _ -> failwith "op"
-  | Call _ -> failwith "call"
-  | Reloadretaddr -> failwith "reloadretaddr"
-  | Pushtrap _ -> failwith "pushtrap"
-  | Poptrap -> failwith "poptrap"
-  | Prologue -> failwith "prologue"
-
-let destroyed_at_terminator = function
-  | Never -> failwith "Never"
-  | Always _ -> failwith "Always"
-  | Parity_test _ -> failwith "Parity"
-  | Truth_test _ -> failwith "Truth"
-  | Float_test _ -> failwith "Float"
-  | Int_test _ -> failwith "Int"
-  | Switch _ -> failwith "Switch"
-  | Return -> failwith "Return"
-  | Raise _ -> failwith "Raise"
-  | Tailcall _ -> failwith "Tailcall"
-
 let entry_label t = t.entry_label
 
 let exit_labels t =
@@ -331,3 +310,79 @@ let print_terminator oc ?(sep = "\n") ti =
   | Tailcall (Self _) -> Printf.fprintf oc "Tailcall self%s" sep
   | Tailcall (Func _) -> Printf.fprintf oc "Tailcall%s" sep
 
+
+(* This duplicates logic for Proc for the amd64 backend. *)
+
+let rax = 0
+let rdx = 4
+let r10 = 10
+let r11 = 11
+let r13 = 9
+let rbp = 12
+let rxmm15 = 115
+
+let all_phys_regs =
+    [| 0; 2; 3; 4; 5; 6; 7; 10; 11; 12
+     ; 100; 101; 102; 103; 104; 105; 106; 107
+     ; 108; 109; 110; 111; 112; 113; 114; 115 |]
+
+let destroyed_at_c_call =
+  if Arch.win64 then
+    [| 0; 4; 5; 6; 7; 10; 11
+     ; 100; 101; 102; 103; 104; 105 |]
+  else
+    [| 0; 2; 3; 4; 5; 6; 7; 10; 11
+     ; 100; 101; 102; 103; 104; 105; 106; 107
+     ; 108; 109; 110; 111; 112; 113; 114; 115 |]
+
+let destroyed_by_plt_stub =
+  if X86_proc.use_plt then [| r10; r11 |] else [| |]
+
+let destroyed_at_alloc =
+  let regs =
+    if Config.spacetime then [| rax; r13 |] else [| rax |]
+  in
+  Array.concat [regs; destroyed_by_plt_stub]
+
+[@@@ocaml.warning "+a-30-40-41-42-4"]
+let destroyed_at_instruction = function
+  | Op (Intop (Idiv | Imod))
+  | Op (Intop_imm((Idiv | Imod), _)) ->
+    [| rax; rdx |]
+  | Op (Store(Single, _, _)) ->
+    [| rxmm15 |]
+  | Op (Intop(Imulh | Icomp _) | Intop_imm((Icomp _), _)) ->
+    [| rax |]
+  | Op _ ->
+    if Config.with_frame_pointers then [| rbp |] else [||]
+  | Call (F (Indirect _))
+  | Call (F (Direct _))
+  | Call (P (External { alloc = true; _ })) ->
+    all_phys_regs
+  | Call (P (External { alloc = false; _ })) ->
+    destroyed_at_c_call
+  | Call (P (Alloc _)) ->
+    destroyed_at_alloc
+  | Call (P (Checkbound _)) ->
+    if Config.spacetime then [| r13 |] else [| |]
+  | Pushtrap _
+  | Poptrap ->
+    [| r11 |]
+  | Reloadretaddr
+  | Prologue ->
+    [| |]
+
+let destroyed_at_terminator = function
+  | Switch _ ->
+    [| rax; rdx |]
+  | Raise _ ->
+    all_phys_regs
+  | Never
+  | Always _
+  | Return
+  | Tailcall _
+  | Parity_test _
+  | Truth_test _
+  | Float_test _
+  | Int_test _ ->
+    if Config.with_frame_pointers then [| rbp |] else [||]
