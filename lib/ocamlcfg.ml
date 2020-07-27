@@ -13,6 +13,8 @@ module Cfg = struct
     let body t = t.body
 
     let terminator t = t.terminator
+
+    let is_exit = Cfg.is_exit
   end
 
   let all_successor_labels t b =

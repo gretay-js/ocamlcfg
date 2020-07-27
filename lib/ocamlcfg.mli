@@ -22,6 +22,8 @@ module Cfg : sig
     val body : t -> basic instruction list
 
     val terminator : t -> terminator instruction
+
+    val is_exit : t -> bool
   end
 
   (** The implementation of type [t] is a mutable structure. *)
@@ -49,8 +51,6 @@ module Cfg : sig
   val entry_label : t -> Label.t
 
   val fun_tailrec_entry_point_label : t -> Label.t
-
-  val is_exit : terminator -> bool
 
   val destroyed_at_instruction : basic -> int array
 

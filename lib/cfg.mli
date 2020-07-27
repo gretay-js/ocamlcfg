@@ -65,7 +65,7 @@ val fun_name : t -> string
 
 (** Properties of instructions *)
 
-val is_exit : terminator -> bool
+val is_exit : basic_block -> bool
 
 val destroyed_at_instruction : basic -> int array
 

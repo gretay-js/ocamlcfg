@@ -133,7 +133,8 @@ let get_block_exn t label =
 
 let fun_name t = t.fun_name
 
-let is_exit = function
+let is_exit block =
+  match block.terminator.desc with
   | Never
   | Return
   | Tailcall _ -> true
@@ -142,14 +143,14 @@ let is_exit = function
   | Truth_test _
   | Float_test _
   | Int_test _
-  | Switch _
-  | Raise _ -> false
+  | Switch _ -> false
+  | Raise _ -> block.can_raise_interproc
 
 let entry_label t = t.entry_label
 
 let exit_labels t =
   Label.Tbl.to_list t.blocks
-  |> List.filter (fun (_, block) -> is_exit block.terminator.desc)
+  |> List.filter (fun (_, block) -> is_exit block)
   |> List.map fst
   |> Label.Set.of_list
 
