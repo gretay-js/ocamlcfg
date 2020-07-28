@@ -611,7 +611,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
         ->
           let desc = to_basic mop in
           block.body <- create_instruction desc i ~trap_depth :: block.body;
-          if Mach.operation_can_raise mop then record_exn t block traps;
+          assert (not (Mach.operation_can_raise mop));
           create_blocks t i.next block ~trap_depth ~traps )
 
 let run (f : Linear.fundecl) ~preserve_orig_labels =
