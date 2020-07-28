@@ -130,3 +130,5 @@ val print_basic : out_channel -> basic instruction -> unit
 
 (* CR-someday gyorsh: store label after separately and update after
    reordering. *)
+
+val print : t -> out_channel -> string -> unit

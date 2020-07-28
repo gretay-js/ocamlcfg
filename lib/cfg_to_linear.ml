@@ -18,25 +18,6 @@ let from_basic (basic : Cfg.basic) : L.instruction_desc =
   | Reloadretaddr -> Lreloadretaddr
   | Pushtrap { lbl_handler } -> Lpushtrap { lbl_handler }
   | Poptrap -> Lpoptrap
-  | Call (F (Indirect { label_after })) -> Lop (Icall_ind { label_after })
-  | Call (F (Direct { func_symbol; label_after })) ->
-      Lop (Icall_imm { func = func_symbol; label_after })
-  | Call (P (External { func_symbol; alloc; label_after })) ->
-      Lop (Iextcall { func = func_symbol; alloc; label_after })
-  | Call
-      (P
-        (Checkbound { immediate = None; label_after_error; spacetime_index }))
-    ->
-      Lop (Iintop (Icheckbound { label_after_error; spacetime_index }))
-  | Call
-      (P
-        (Checkbound
-          { immediate = Some i; label_after_error; spacetime_index })) ->
-      Lop
-        (Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i))
-  | Call (P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }))
-    ->
-      Lop (Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index })
   | Op op ->
       let op : Mach.operation =
         match op with
@@ -150,6 +131,23 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
     match terminator.desc with
     | Return -> [L.Lreturn]
     | Raise kind -> [L.Lraise kind]
+    | Call (callee, lbl) ->
+      let call =
+        match callee with
+        | F (Direct { func_symbol; label_after }) ->
+          L.Lop (Icall_imm { func = func_symbol; label_after })
+        | F (Indirect { label_after }) ->
+          L.Lop (Icall_ind { label_after })
+        | P (External { func_symbol; alloc; label_after }) ->
+          L.Lop (Iextcall { func = func_symbol; alloc; label_after })
+        | P (Checkbound { immediate = None; label_after_error; spacetime_index }) ->
+          L.Lop (Iintop (Icheckbound { label_after_error; spacetime_index }))
+        | P (Checkbound { immediate = Some i; label_after_error; spacetime_index }) ->
+          L.Lop (Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i))
+        | P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }) ->
+          L.Lop (Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index })
+      in
+      if Label.equal next.label lbl then [call] else [call; L.Lbranch lbl]
     | Tailcall (Func (Indirect { label_after })) ->
         [L.Lop (Itailcall_ind { label_after })]
     | Tailcall (Func (Direct { func_symbol; label_after })) ->
@@ -293,6 +291,7 @@ let need_starting_label (cfg_with_layout : CL.t) (block : Cfg.basic_block)
         (* CR-someday gyorsh: is this correct with label_after for calls? *)
         match prev_block.terminator.desc with
         | Switch _ -> true
+        | Call _ -> false
         | Never -> Misc.fatal_error "Cannot linearize terminator: Never"
         | Always _ | Parity_test _ | Truth_test _ | Float_test _ | Int_test _
           ->

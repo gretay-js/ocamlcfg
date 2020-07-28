@@ -183,7 +183,7 @@ let register_block t (block : C.basic_block) traps =
 
 let can_raise_terminator (i : C.terminator) =
   match i with
-  | Raise _ | Tailcall (Func _) -> true
+  | Raise _ | Tailcall (Func _) | Call _ -> true
   | Never | Always _ | Parity_test _ | Truth_test _ | Float_test _
   | Int_test _ | Switch _ | Return
   | Tailcall (Self _) ->
@@ -356,7 +356,7 @@ let add_terminator t (block : C.basic_block) (i : L.instruction)
      fallthroughs in Linear. *)
   ( match desc with
   | Never -> Misc.fatal_error "Cannot add terminator: Never"
-  | Always _ | Parity_test _ | Truth_test _ | Float_test _ | Int_test _ -> ()
+  | Always _ | Parity_test _ | Truth_test _ | Float_test _ | Int_test _ | Call _ -> ()
   | Switch _ | Return | Raise _ | Tailcall _ ->
       if not (Linear_utils.defines_label i.next) then
         Misc.fatal_errorf "Linear instruction not followed by label:@ %a"
@@ -368,33 +368,15 @@ let add_terminator t (block : C.basic_block) (i : L.instruction)
 
 let to_basic (mop : Mach.operation) : C.basic =
   match mop with
-  | Icall_ind { label_after } -> Call (F (Indirect { label_after }))
-  | Icall_imm { func; label_after } ->
-      Call (F (Direct { func_symbol = func; label_after }))
-  | Iextcall { func; alloc; label_after } ->
-      Call (P (External { func_symbol = func; alloc; label_after }))
-  | Iintop (Icheckbound { label_after_error; spacetime_index }) ->
-      Call
-        (P
-           (Checkbound
-              { immediate = None; label_after_error; spacetime_index }))
   | Iintop
-      ( ( Iadd | Isub | Imul | Imulh | Idiv | Imod | Iand | Ior | Ixor | Ilsl
-        | Ilsr | Iasr | Icomp _ ) as op ) ->
-      Op (Intop op)
-  | Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i) ->
-      Call
-        (P
-           (Checkbound
-              { immediate = Some i; label_after_error; spacetime_index }))
+          ( ( Iadd | Isub | Imul | Imulh | Idiv | Imod | Iand | Ior | Ixor | Ilsl
+            | Ilsr | Iasr | Icomp _ ) as op ) ->
+          Op (Intop op)
   | Iintop_imm
       ( ( ( Iadd | Isub | Imul | Imulh | Idiv | Imod | Iand | Ior | Ixor
           | Ilsl | Ilsr | Iasr | Icomp _ ) as op ),
         i ) ->
       Op (Intop_imm (op, i))
-  | Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index } ->
-      Call
-        (P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }))
   | Iprobe { name; handler_code_sym } ->
       Op (Probe { name; handler_code_sym })
   | Iprobe_is_enabled { name } -> Op (Probe_is_enabled { name })
@@ -421,7 +403,11 @@ let to_basic (mop : Mach.operation) : C.basic =
       Op
         (Name_for_debugger
            { ident; which_parameter; provenance; is_assignment })
-  | Itailcall_ind _ | Itailcall_imm _ -> assert false
+  | Iintop (Icheckbound _)
+  | Iintop_imm (Icheckbound _, _)
+  | Icall_ind _ | Icall_imm _ | Iextcall _ | Ialloc _
+  | Itailcall_ind _ | Itailcall_imm _ ->
+    assert false
 
 (** [traps] represents the trap stack, with head being the top. [trap_depths]
     is the depth of the trap stack. *)
@@ -564,11 +550,19 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       block.body <- create_instruction desc i ~trap_depth :: block.body;
       create_blocks t i.next block ~trap_depth ~traps
   | Lop mop -> (
+      let create_call callee =
+        let fallthrough = get_or_make_label t i.next in
+        let desc =
+          C.Call (callee, fallthrough.label)
+        in
+        add_terminator t block i desc ~trap_depth ~traps;
+        create_blocks t fallthrough.insn block ~trap_depth ~traps
+      in
       match mop with
       | Itailcall_ind { label_after } ->
-          let desc = C.Tailcall (Func (Indirect { label_after })) in
-          add_terminator t block i desc ~trap_depth ~traps;
-          create_blocks t i.next block ~trap_depth ~traps
+        let desc = C.Tailcall (Func (Indirect { label_after })) in
+        add_terminator t block i desc ~trap_depth ~traps;
+        create_blocks t i.next block ~trap_depth ~traps
       | Itailcall_imm { func = func_symbol; label_after } ->
           let desc =
             if String.equal func_symbol (C.fun_name t.cfg) then
@@ -577,14 +571,42 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
           in
           add_terminator t block i desc ~trap_depth ~traps;
           create_blocks t i.next block ~trap_depth ~traps
+      | Icall_ind { label_after } ->
+          create_call (F (Indirect { label_after }))
+
+      | Icall_imm { func; label_after } ->
+          create_call (F (Direct { func_symbol = func; label_after }))
+
+      | Iextcall { func; alloc; label_after } ->
+          create_call (P (External { func_symbol = func; alloc; label_after }))
+
+      | Iintop (Icheckbound { label_after_error; spacetime_index }) ->
+          create_call
+            (P
+               (Checkbound
+                  { immediate = None; label_after_error; spacetime_index }))
+      | Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i) ->
+          create_call
+            (P
+               (Checkbound
+                  { immediate = Some i; label_after_error; spacetime_index }))
+      | Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index } ->
+          create_call
+            (P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }))
+
+
       | Imove | Ispill | Ireload | Inegf | Iabsf | Iaddf | Isubf | Imulf
       | Idivf | Ifloatofint | Iintoffloat | Iconst_int _ | Iconst_float _
-      | Iconst_symbol _ | Icall_ind _ | Icall_imm _ | Iextcall _
+      | Iconst_symbol _
       | Istackoffset _
       | Iload (_, _)
       | Istore (_, _, _)
-      | Ialloc _ | Iintop _
-      | Iintop_imm (_, _)
+      | Iintop
+          ( Iadd | Isub | Imul | Imulh | Idiv | Imod | Iand | Ior | Ixor | Ilsl
+          | Ilsr | Iasr | Icomp _ )
+      | Iintop_imm
+          ( ( Iadd | Isub | Imul | Imulh | Idiv | Imod | Iand | Ior | Ixor | Ilsl
+            | Ilsr | Iasr | Icomp _ ), _)
       | Iprobe _ | Iprobe_is_enabled _ | Ispecific _ | Iname_for_debugger _
         ->
           let desc = to_basic mop in

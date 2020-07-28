@@ -63,6 +63,8 @@ module Cfg : sig
     -> unit
 
   val print_basic : out_channel -> basic instruction -> unit
+
+  val print : t -> out_channel -> string -> unit
 end
 
 module Cfg_with_layout : sig

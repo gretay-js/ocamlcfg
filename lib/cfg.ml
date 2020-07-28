@@ -36,6 +36,7 @@ let mem_block t label = Label.Tbl.mem t.blocks label
 let successor_labels_normal t ti =
   match ti.desc with
   | Tailcall (Self _) -> Label.Set.singleton t.fun_tailrec_entry_point_label
+  | Call (_, label) -> Label.Set.singleton label
   | Switch labels -> Array.to_seq labels |> Label.Set.of_seq
   | Return | Raise _ | Tailcall (Func _) -> Label.Set.empty
   | Never -> Label.Set.empty
@@ -113,6 +114,7 @@ let replace_successor_labels t ~normal ~exn block ~f =
           t.fun_tailrec_entry_point_label <-
             f t.fun_tailrec_entry_point_label;
           block.terminator.desc
+      | Call (op, l) -> Call (op, f l)
       | Return | Raise _ | Tailcall (Func _) -> block.terminator.desc
     in
     block.terminator <- { block.terminator with desc }
@@ -137,14 +139,18 @@ let is_exit block =
   match block.terminator.desc with
   | Never
   | Return
-  | Tailcall _ -> true
+  | Tailcall _ ->
+    true
   | Always _
   | Parity_test _
   | Truth_test _
   | Float_test _
   | Int_test _
-  | Switch _ -> false
-  | Raise _ -> block.can_raise_interproc
+  | Switch _ ->
+    false
+  | Call _
+  | Raise _ ->
+    block.can_raise_interproc
 
 let entry_label t = t.entry_label
 
@@ -258,9 +264,6 @@ let print_basic oc i =
   Printf.fprintf oc "%d: " i.id;
   (match i.desc with
   | Op op -> print_op oc op
-  | Call call ->
-      Printf.fprintf oc "Call ";
-      print_call oc call
   | Reloadretaddr -> Printf.fprintf oc "Reloadretaddr"
   | Pushtrap { lbl_handler } ->
       Printf.fprintf oc "Pushtrap handler=%d" lbl_handler
@@ -308,6 +311,10 @@ let print_terminator oc ?(sep = "\n") ti =
       done
   | Return -> Printf.fprintf oc "Return%s" sep
   | Raise _ -> Printf.fprintf oc "Raise%s" sep
+  | Call (call, label) ->
+      Printf.fprintf oc "Call ";
+      print_call oc call;
+      Printf.fprintf oc " goto %d%s" label sep
   | Tailcall (Self _) -> Printf.fprintf oc "Tailcall self%s" sep
   | Tailcall (Func _) -> Printf.fprintf oc "Tailcall%s" sep
 
@@ -361,16 +368,6 @@ let destroyed_at_instruction = function
     [| rax |]
   | Op _ ->
     if Config.with_frame_pointers then [| rbp |] else [||]
-  | Call (F (Indirect _))
-  | Call (F (Direct _))
-  | Call (P (External { alloc = true; _ })) ->
-    all_phys_regs
-  | Call (P (External { alloc = false; _ })) ->
-    destroyed_at_c_call
-  | Call (P (Alloc _)) ->
-    destroyed_at_alloc
-  | Call (P (Checkbound _)) ->
-    if Config.spacetime then [| r13 |] else [| |]
   | Pushtrap _
   | Poptrap ->
     [| r11 |]
@@ -383,6 +380,16 @@ let destroyed_at_terminator = function
     [| rax; rdx |]
   | Raise _ ->
     all_phys_regs
+  | Call (F (Indirect _), _)
+  | Call (F (Direct _), _)
+  | Call (P (External { alloc = true; _ }), _) ->
+    all_phys_regs
+  | Call (P (External { alloc = false; _ }), _) ->
+    destroyed_at_c_call
+  | Call (P (Alloc _), _) ->
+    destroyed_at_alloc
+  | Call (P (Checkbound _), _) ->
+    if Config.spacetime then [| r13 |] else [| |]
   | Never
   | Always _
   | Return
@@ -392,3 +399,24 @@ let destroyed_at_terminator = function
   | Float_test _
   | Int_test _ ->
     if Config.with_frame_pointers then [| rbp |] else [||]
+
+let print t oc msg =
+  Printf.fprintf oc "cfg for %s\n" msg;
+  Printf.fprintf oc "%s\n" t.fun_name;
+  Printf.fprintf oc "blocks.length=%d\n" (Label.Tbl.length t.blocks);
+  let print_block label block =
+    Printf.fprintf oc "\n\n\n%d:\n" label;
+    List.iter (fun inst -> Printf.fprintf oc "  %a\n" print_basic inst) block.body;
+    Printf.fprintf oc "  ";
+    print_terminator oc block.terminator;
+    Printf.fprintf oc "\npredecessors:";
+    Label.Set.iter (Printf.fprintf oc " %d") block.predecessors;
+    Printf.fprintf oc "\nsuccessors:";
+    Label.Set.iter (Printf.fprintf oc " %d")
+      (successor_labels ~normal:true ~exn:false t block);
+    Printf.fprintf oc "\nexn-successors:";
+    Label.Set.iter (Printf.fprintf oc " %d")
+      (successor_labels ~normal:false ~exn:true t block)
+  in
+  Label.Tbl.iter print_block t.blocks;
+  Printf.fprintf oc "\n"

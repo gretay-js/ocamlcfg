@@ -111,7 +111,6 @@ module S = struct
 
   type basic =
     | Op of operation
-    | Call of call_operation
     | Reloadretaddr
     | Pushtrap of { lbl_handler : Label.t }
     | Poptrap
@@ -140,6 +139,7 @@ module S = struct
     | Switch of Label.t array
     | Return
     | Raise of Lambda.raise_kind
+    | Call of call_operation * Label.t
     | Tailcall of tail_call_operation
 
 end
