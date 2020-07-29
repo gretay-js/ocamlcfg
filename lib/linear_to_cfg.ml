@@ -270,6 +270,9 @@ let check_and_register_traps t =
           label)
     t.trap_handlers;
 
+  (* ensure blocks have at most one exn black *)
+
+
   (* propagate remaining trap stacks to handlers *)
   t.unresolved_traps_to_pop <-
     resolve_traps_to_pop t t.unresolved_traps_to_pop;
@@ -550,10 +553,10 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       block.body <- create_instruction desc i ~trap_depth :: block.body;
       create_blocks t i.next block ~trap_depth ~traps
   | Lop mop -> (
-      let create_call callee =
+      let create_call call_operation =
         let fallthrough = get_or_make_label t i.next in
         let desc =
-          C.Call (callee, fallthrough.label)
+          C.Call { call_operation; fallthrough = fallthrough.label }
         in
         add_terminator t block i desc ~trap_depth ~traps;
         create_blocks t fallthrough.insn block ~trap_depth ~traps

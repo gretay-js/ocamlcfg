@@ -131,9 +131,9 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
     match terminator.desc with
     | Return -> [L.Lreturn]
     | Raise kind -> [L.Lraise kind]
-    | Call (callee, lbl) ->
+    | Call { call_operation; fallthrough } ->
       let call =
-        match callee with
+        match call_operation with
         | F (Direct { func_symbol; label_after }) ->
           L.Lop (Icall_imm { func = func_symbol; label_after })
         | F (Indirect { label_after }) ->
@@ -147,7 +147,7 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
         | P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }) ->
           L.Lop (Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index })
       in
-      if Label.equal next.label lbl then [call] else [call; L.Lbranch lbl]
+      if Label.equal next.label fallthrough then [call] else [call; L.Lbranch fallthrough]
     | Tailcall (Func (Indirect { label_after })) ->
         [L.Lop (Itailcall_ind { label_after })]
     | Tailcall (Func (Direct { func_symbol; label_after })) ->

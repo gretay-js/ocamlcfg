@@ -36,7 +36,7 @@ let mem_block t label = Label.Tbl.mem t.blocks label
 let successor_labels_normal t ti =
   match ti.desc with
   | Tailcall (Self _) -> Label.Set.singleton t.fun_tailrec_entry_point_label
-  | Call (_, label) -> Label.Set.singleton label
+  | Call { fallthrough; _ } -> Label.Set.singleton fallthrough
   | Switch labels -> Array.to_seq labels |> Label.Set.of_seq
   | Return | Raise _ | Tailcall (Func _) -> Label.Set.empty
   | Never -> Label.Set.empty
@@ -114,7 +114,8 @@ let replace_successor_labels t ~normal ~exn block ~f =
           t.fun_tailrec_entry_point_label <-
             f t.fun_tailrec_entry_point_label;
           block.terminator.desc
-      | Call (op, l) -> Call (op, f l)
+      | Call { call_operation; fallthrough } ->
+        Call { call_operation; fallthrough = f fallthrough }
       | Return | Raise _ | Tailcall (Func _) -> block.terminator.desc
     in
     block.terminator <- { block.terminator with desc }
@@ -311,10 +312,10 @@ let print_terminator oc ?(sep = "\n") ti =
       done
   | Return -> Printf.fprintf oc "Return%s" sep
   | Raise _ -> Printf.fprintf oc "Raise%s" sep
-  | Call (call, label) ->
+  | Call { call_operation; fallthrough } ->
       Printf.fprintf oc "Call ";
-      print_call oc call;
-      Printf.fprintf oc " goto %d%s" label sep
+      print_call oc call_operation;
+      Printf.fprintf oc " goto %d%s" fallthrough sep
   | Tailcall (Self _) -> Printf.fprintf oc "Tailcall self%s" sep
   | Tailcall (Func _) -> Printf.fprintf oc "Tailcall%s" sep
 
@@ -380,15 +381,15 @@ let destroyed_at_terminator = function
     [| rax; rdx |]
   | Raise _ ->
     all_phys_regs
-  | Call (F (Indirect _), _)
-  | Call (F (Direct _), _)
-  | Call (P (External { alloc = true; _ }), _) ->
+  | Call { call_operation = F (Indirect _); _ }
+  | Call { call_operation = F (Direct _); _ }
+  | Call { call_operation = P (External { alloc = true; _ }); _ } ->
     all_phys_regs
-  | Call (P (External { alloc = false; _ }), _) ->
+  | Call { call_operation = P (External { alloc = false; _ }); _ } ->
     destroyed_at_c_call
-  | Call (P (Alloc _), _) ->
+  | Call { call_operation = P (Alloc _); _ } ->
     destroyed_at_alloc
-  | Call (P (Checkbound _), _) ->
+  | Call { call_operation = P (Checkbound _); _ } ->
     if Config.spacetime then [| r13 |] else [| |]
   | Never
   | Always _

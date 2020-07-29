@@ -139,7 +139,7 @@ module S = struct
     | Switch of Label.t array
     | Return
     | Raise of Lambda.raise_kind
-    | Call of call_operation * Label.t
+    | Call of { call_operation: call_operation; fallthrough: Label.t }
     | Tailcall of tail_call_operation
 
 end
