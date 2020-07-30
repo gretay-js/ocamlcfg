@@ -16,5 +16,6 @@
       linear_to_cfg
   )
  (libraries
-  compiler-libs.common)
+  compiler-libs.common
+  compiler-libs.optcomp)
  (synopsis "Library for building CFG from Linear code"))

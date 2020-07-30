@@ -1,0 +1,12 @@
+
+(library
+  (name test_graph)
+  (libraries core ocamlcfg)
+  (modules test_graph)
+  (preprocess (pps ppx_jane)))
+
+(test
+  (name path_analysis_test)
+  (modules path_analysis_test)
+  (libraries test_graph)
+  (preprocess (pps ppx_jane)))

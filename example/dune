@@ -1,10 +1,6 @@
 (executable
  (name example)
- (libraries
-        core
-        compiler-libs.common
-        compiler-libs.optcomp
-        ocamlcfg)
+ (libraries core ocamlcfg)
  (preprocess (pps ppx_jane)))
 
 
