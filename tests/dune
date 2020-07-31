@@ -10,3 +10,9 @@
   (modules path_analysis_test)
   (libraries test_graph)
   (preprocess (pps ppx_jane)))
+
+(test
+  (name dominator_test)
+  (modules dominator_test)
+  (libraries test_graph)
+  (preprocess (pps ppx_jane)))

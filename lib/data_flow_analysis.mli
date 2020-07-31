@@ -22,8 +22,3 @@ module Make_backward_cfg_solver (P: CfgKillGenProblem) : sig
   (* Functor to build a backward solver on the cfg. *)
   val solve : P.t -> (P.K.S.t * P.K.S.t) Inst_id.Map.t
 end
-
-module Dominators : sig
-  (* Dominator analysis. *)
-  val solve : Cfg.t -> Dom.Set.t Label.Map.t
-end

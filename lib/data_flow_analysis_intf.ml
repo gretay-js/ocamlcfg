@@ -27,7 +27,8 @@ module S = struct
     val next : t -> Node.t -> Node.t list
     val prev : t -> Node.t -> Node.t list
 
-    val init : t -> Node.t -> S.t * S.t
+    val empty : t -> Node.t -> S.t
+    val entry : t -> Node.t -> S.t
     val f : t -> Node.t -> S.t -> S.t
   end
 
@@ -62,7 +63,8 @@ module S = struct
     val start_node : t -> Parent.t -> Node.t
     val next_node : t -> Node.t -> Node.t option
 
-    val init : t -> Parent.t -> K.S.t * K.S.t
+    val empty : t -> Parent.t -> K.S.t
+    val entry : t -> Parent.t -> K.S.t
     val kg : t -> Node.t -> K.t
   end
 
@@ -106,13 +108,8 @@ module S = struct
     type t
     val cfg : t -> Cfg.t
 
-    val init : t -> Label.t -> K.S.t * K.S.t
+    val empty : t -> Label.t -> K.S.t
+    val entry : t -> Label.t -> K.S.t
     val kg : t -> Inst_id.t -> K.t
-  end
-
-  module Dom = struct
-    (* Lattice for dominator analysis. *)
-    type t = Label.t
-    module Set = Label.Set
   end
 end

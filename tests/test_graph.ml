@@ -19,7 +19,8 @@ include G
 module type Test_graph_problem = sig
   module S : Semilattice
 
-  val init : t -> ID.t -> S.t * S.t
+  val empty : t -> ID.t -> S.t
+  val entry : t -> ID.t -> S.t
   val f : t -> ID.t -> S.t -> S.t
 end
 
@@ -33,6 +34,12 @@ let graph_prev t id =
 
 let is_entry t id = List.is_empty (graph_prev t id)
 let is_exit t id = List.is_empty (graph_next t id)
+
+let all_nodes t =
+    t
+    |> ID.Map.bindings
+    |> List.map ~f:fst
+    |> ID.Set.of_list
 
 module Make_forward_graph_solver (P: Test_graph_problem) = struct
   module T = struct
@@ -51,7 +58,8 @@ module Make_forward_graph_solver (P: Test_graph_problem) = struct
 
     let next = graph_next
     let prev = graph_prev
-    let init = P.init
+    let entry = P.entry
+    let empty = P.empty
     let f = P.f
   end
 
@@ -75,7 +83,8 @@ module Make_backward_graph_solver (P: Test_graph_problem) = struct
 
     let next = graph_prev
     let prev = graph_next
-    let init = P.init
+    let entry = P.entry
+    let empty = P.empty
     let f = P.f
   end
 

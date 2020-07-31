@@ -35,29 +35,18 @@ module Make_solver (P: Problem) = struct
       match Q.pop q with
       | None -> solution
       | Some (n, q) ->
-        let get_in_out solution n =
-          match Map.find n solution with
-          | (sol_in, sol_out) -> sol_in, sol_out, solution
-          | exception Not_found ->
-            let (sol_in, sol_out) = P.init t n in
-            let solution = Map.add n (sol_in, sol_out) solution in
-            sol_in, sol_out, solution
-        in
-        let outs_prev, solution =
-          List.fold_left
-            (fun (outs_prev, solution) node ->
-              let _, sol_out, solution = get_in_out solution node in
-              sol_out :: outs_prev, solution)
-            ([], solution)
+        let outs_prev =
+          List.map
+            (fun prev ->
+              match Map.find prev solution with
+              | (_, sol_out) -> sol_out
+              | exception Not_found -> P.empty t prev)
             (P.prev t n)
         in
-        let sol_in, solution =
+        let sol_in =
           match outs_prev with
-          | [] ->
-            let sol_in, _, solution = get_in_out solution n in
-            sol_in, solution
-          | s :: ss ->
-            List.fold_left P.S.lub s ss, solution
+          | [] -> P.entry t n
+          | s :: ss -> List.fold_left P.S.lub s ss
         in
         let sol_out = P.f t n sol_in in
         match Map.find n solution with
@@ -87,7 +76,8 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
     let entries { pt; _ } = P.entries pt
     let next { pt; _ } = P.next pt
     let prev { pt; _ } = P.prev pt
-    let init { pt; _ } = P.init pt
+    let empty { pt; _ } = P.empty pt
+    let entry { pt; _ } = P.entry pt
 
     let f { kill_gens; _ } n sol =
       P.K.f sol (ParentMap.find n kill_gens)
@@ -171,7 +161,8 @@ module Make_forward_cfg_solver (P: CfgKillGenProblem) = struct
         if n + 1 = List.length bb.body then Some (Node.Term block)
         else Some (Node.Inst (block, n + 1))
 
-    let init = P.init
+    let entry = P.entry
+    let empty = P.empty
     let kg = P.kg
   end
 
@@ -206,42 +197,10 @@ module Make_backward_cfg_solver (P: CfgKillGenProblem) = struct
       | Node.Inst (block, n) ->
         Some (Node.Inst (block, n - 1))
 
-    let init = P.init
+    let entry = P.entry
+    let empty = P.empty
     let kg = P.kg
   end
 
   let solve = let module M = Make_kill_gen_solver(T) in M.solve
-end
-
-let all_nodes cfg =
-  Dom.Set.of_list (List.map (fun bb -> bb.Cfg.start) (Cfg.blocks cfg))
-
-module DominatorsProblem = struct
-  module S = struct
-    include Dom.Set
-    let lub = Dom.Set.inter
-  end
-
-  module Node = Label
-
-  type t = Cfg.t
-
-  let entries cfg = [Cfg.entry_label cfg]
-
-  let next = cfg_next
-  let prev = cfg_prev
-
-  let init cfg node =
-    if node = Cfg.entry_label cfg then
-      (Dom.Set.singleton node, Dom.Set.empty)
-    else
-      (all_nodes cfg, Dom.Set.empty)
-
-  let f _cfg node v = Dom.Set.add node v
-end
-
-module Dominators = struct
-  let solve cfg =
-    let module DominatorsSolver = Make_solver(DominatorsProblem) in
-    Label.Map.map snd (DominatorsSolver.solve cfg)
 end

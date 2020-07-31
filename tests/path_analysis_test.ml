@@ -22,7 +22,7 @@ let print_solution solution =
         print_s [%message (path : Paths.Path.t)]))
     solution
 
-let path_f _ node s =
+let paths_next _ node s =
   s
   |> Paths.Set.filter ~f:(fun path -> List.count path ~f:(Int.equal node) < 2)
   |> Paths.Set.map ~f:(fun path -> node :: path)
@@ -32,10 +32,10 @@ let () =
     module Problem = struct
       module S = Paths
 
-      let init t id =
-        ((if is_entry t id then Paths.Set.singleton [] else Paths.Set.empty), Paths.Set.empty)
+      let entry _ _ = Paths.Set.singleton []
+      let empty _ _ = Paths.Set.empty
 
-      let f = path_f
+      let f = paths_next
     end
   in
   let module Solver = Make_forward_graph_solver(Problem) in
@@ -46,10 +46,10 @@ let () =
     module Problem = struct
       module S = Paths
 
-      let init t id =
-        ((if is_exit t id then Paths.Set.singleton [] else Paths.Set.empty), Paths.Set.empty)
+      let entry _ _ = Paths.Set.singleton []
+      let empty _ _ = Paths.Set.empty
 
-      let f = path_f
+      let f = paths_next
     end
   in
   let module Solver = Make_backward_graph_solver(Problem) in

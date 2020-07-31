@@ -131,7 +131,8 @@ module Analysis : sig
 
     type t
     val cfg : t -> Cfg.t
-    val init : t -> Label.t -> K.S.t * K.S.t
+    val empty : t -> Label.t -> K.S.t
+    val entry : t -> Label.t -> K.S.t
     val kg : t -> Inst_id.t -> K.t
   end
 
@@ -143,9 +144,5 @@ module Analysis : sig
   module Make_backward_cfg_solver (P: CfgKillGenProblem) : sig
     (* Functor to build a backward solver on the cfg. *)
     val solve : P.t -> (P.K.S.t * P.K.S.t) Inst_id.Map.t
-  end
-
-  module Dominators : sig
-    val solve : Cfg.t -> Dom.Set.t Label.Map.t
   end
 end
