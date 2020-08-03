@@ -22,7 +22,7 @@ module S = struct
 
     type t
 
-    val entries : t -> Node.t list
+    val entries : t -> Node.Set.t
 
     val next : t -> Node.t -> Node.t list
     val prev : t -> Node.t -> Node.t list
@@ -55,7 +55,7 @@ module S = struct
 
     type t
 
-    val entries : t -> Parent.t list
+    val entries : t -> Parent.Set.t
 
     val next : t -> Parent.t -> Parent.t list
     val prev : t -> Parent.t -> Parent.t list

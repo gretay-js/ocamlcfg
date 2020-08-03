@@ -30,7 +30,8 @@ module Make_solver (P: Problem) = struct
 
   let solve t =
     let module Map = P.Node.Map in
-    let q = List.fold_left Q.push Q.empty (P.entries t) in
+    let entries = P.entries t in
+    let q = P.Node.Set.fold (fun n q -> Q.push q n) entries Q.empty in
     let rec fixpoint solution q =
       match Q.pop q with
       | None -> solution
@@ -46,7 +47,10 @@ module Make_solver (P: Problem) = struct
         let sol_in =
           match outs_prev with
           | [] -> P.entry t n
-          | s :: ss -> List.fold_left P.S.lub s ss
+          | ss when P.Node.Set.mem n entries ->
+            List.fold_left P.S.lub (P.entry t n) ss
+          | s :: ss ->
+            List.fold_left P.S.lub s ss
         in
         let sol_out = P.f t n sol_in in
         match Map.find n solution with
@@ -103,7 +107,7 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
           let kill_gens' = ParentMap.add parent kg kill_gens in
           List.fold_left dfs kill_gens' (P.next pt parent)
       in
-      List.fold_left dfs ParentMap.empty (P.entries pt)
+      P.Parent.Set.fold (fun n kg -> dfs kg n) (P.entries pt) ParentMap.empty
     in
     let parent_solution =
       Parent_solver.solve { T.pt; T.kill_gens }
@@ -143,7 +147,7 @@ module Make_forward_cfg_solver (P: CfgKillGenProblem) = struct
 
     type t = P.t
 
-    let entries t = [Cfg.entry_label (P.cfg t)]
+    let entries t = Label.Set.singleton (Cfg.entry_label (P.cfg t))
 
     let next t = cfg_next (P.cfg t)
     let prev t = cfg_prev (P.cfg t)
@@ -179,7 +183,7 @@ module Make_backward_cfg_solver (P: CfgKillGenProblem) = struct
 
     type t = P.t
 
-    let entries t = P.cfg t |> Cfg.exit_labels |> Label.Set.elements
+    let entries t = P.cfg t |> Cfg.exit_labels
 
     let next t = cfg_prev (P.cfg t)
     let prev t = cfg_next (P.cfg t)

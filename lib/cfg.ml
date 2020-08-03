@@ -140,8 +140,9 @@ let is_exit block =
   match block.terminator.desc with
   | Never
   | Return
-  | Tailcall _ ->
+  | Tailcall (Func _) ->
     true
+  | Tailcall (Self _)
   | Always _
   | Parity_test _
   | Truth_test _

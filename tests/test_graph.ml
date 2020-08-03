@@ -55,6 +55,7 @@ module Make_forward_graph_solver (P: Test_graph_problem) = struct
           match graph_prev t n with
           | [] -> Some n
           | _ -> None)
+      |> ID.Set.of_list
 
     let next = graph_next
     let prev = graph_prev
@@ -80,6 +81,7 @@ module Make_backward_graph_solver (P: Test_graph_problem) = struct
           match next with
           | [] -> Some n
           | _ -> None)
+      |> ID.Set.of_list
 
     let next = graph_prev
     let prev = graph_next
