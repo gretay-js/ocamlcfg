@@ -245,7 +245,11 @@ let register_exns t label (block : C.basic_block) =
                 label;
             acc
       in
-      block.exns <- List.fold_left f Label.Set.empty exns;
+      let exn_set = List.fold_left f Label.Set.empty exns in
+      (match Label.Set.elements exn_set with
+      | [] | [_] -> block.exns <- exn_set
+      | _ ->
+        Misc.fatal_errorf "%s: too many handlers for %d" t.cfg.fun_name label);
       if !C.verbose then (
         Printf.printf "%s: %d exn stacks at %d: " t.cfg.fun_name
           (List.length exns) label;
@@ -269,9 +273,6 @@ let check_and_register_traps t =
           \                           with an Lentertrap instruction." label
           label)
     t.trap_handlers;
-
-  (* ensure blocks have at most one exn black *)
-
 
   (* propagate remaining trap stacks to handlers *)
   t.unresolved_traps_to_pop <-
@@ -556,7 +557,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       let create_call call_operation =
         let fallthrough = get_or_make_label t i.next in
         let desc =
-          C.Call { call_operation; fallthrough = fallthrough.label }
+          C.Call { call_operation; successor = fallthrough.label }
         in
         add_terminator t block i desc ~trap_depth ~traps;
         create_blocks t fallthrough.insn block ~trap_depth ~traps

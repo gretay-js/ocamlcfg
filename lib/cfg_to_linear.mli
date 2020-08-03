@@ -4,4 +4,6 @@
 
 val run : Cfg_with_layout.t -> Linear.instruction
 
+val print_linear : Format.formatter -> Cfg_with_layout.t -> unit
+
 val print_assembly : Cfg.basic_block list -> unit

@@ -46,6 +46,8 @@ end
 module Util = struct
   let verbose = Cfg.verbose
 
+  let print_linear = Cfg_to_linear.print_linear
+
   let print_assembly = Cfg_to_linear.print_assembly
 end
 

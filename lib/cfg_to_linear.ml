@@ -131,7 +131,7 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
     match terminator.desc with
     | Return -> [L.Lreturn]
     | Raise kind -> [L.Lraise kind]
-    | Call { call_operation; fallthrough } ->
+    | Call { call_operation; successor } ->
       let call =
         match call_operation with
         | F (Direct { func_symbol; label_after }) ->
@@ -147,7 +147,7 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
         | P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }) ->
           L.Lop (Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index })
       in
-      if Label.equal next.label fallthrough then [call] else [call; L.Lbranch fallthrough]
+      if Label.equal next.label successor then [call] else [call; L.Lbranch successor]
     | Tailcall (Func (Indirect { label_after })) ->
         [L.Lop (Itailcall_ind { label_after })]
     | Tailcall (Func (Direct { func_symbol; label_after })) ->
@@ -352,6 +352,25 @@ let run cfg_with_layout =
     next := { label; insn }
   done;
   !next.insn
+
+(** debug print block as linear *)
+let print_linear fmt cl =
+  let cfg = CL.cfg cl in
+  let fun_body = run cl in
+  let fundecl =
+    { Linear.fun_name = Cfg.fun_name cfg;
+      fun_body;
+      fun_fast = false;
+      fun_dbg = Debuginfo.none;
+      fun_spacetime_shape = None;
+      fun_num_stack_slots = Array.make Proc.num_register_classes 0;
+      fun_frame_required = false;
+      fun_prologue_required = false;
+      fun_contains_calls = false;
+      fun_tailrec_entry_point_label = Cfg.fun_tailrec_entry_point_label cfg
+    }
+  in
+  Printlinear.fundecl fmt fundecl
 
 (** debug print block as assembly *)
 let print_assembly (blocks : Cfg.basic_block list) =

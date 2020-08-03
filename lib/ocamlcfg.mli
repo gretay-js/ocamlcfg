@@ -109,6 +109,8 @@ end
 module Util : sig
   val verbose : bool ref
 
+  val print_linear : Format.formatter -> Cfg_with_layout.t -> unit
+
   val print_assembly : Cfg.Basic_block.t list -> unit
 end
 

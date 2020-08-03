@@ -36,7 +36,7 @@ let mem_block t label = Label.Tbl.mem t.blocks label
 let successor_labels_normal t ti =
   match ti.desc with
   | Tailcall (Self _) -> Label.Set.singleton t.fun_tailrec_entry_point_label
-  | Call { fallthrough; _ } -> Label.Set.singleton fallthrough
+  | Call { successor; _ } -> Label.Set.singleton successor
   | Switch labels -> Array.to_seq labels |> Label.Set.of_seq
   | Return | Raise _ | Tailcall (Func _) -> Label.Set.empty
   | Never -> Label.Set.empty
@@ -114,8 +114,8 @@ let replace_successor_labels t ~normal ~exn block ~f =
           t.fun_tailrec_entry_point_label <-
             f t.fun_tailrec_entry_point_label;
           block.terminator.desc
-      | Call { call_operation; fallthrough } ->
-        Call { call_operation; fallthrough = f fallthrough }
+      | Call { call_operation; successor } ->
+        Call { call_operation; successor = f successor }
       | Return | Raise _ | Tailcall (Func _) -> block.terminator.desc
     in
     block.terminator <- { block.terminator with desc }
@@ -312,10 +312,10 @@ let print_terminator oc ?(sep = "\n") ti =
       done
   | Return -> Printf.fprintf oc "Return%s" sep
   | Raise _ -> Printf.fprintf oc "Raise%s" sep
-  | Call { call_operation; fallthrough } ->
+  | Call { call_operation; successor } ->
       Printf.fprintf oc "Call ";
       print_call oc call_operation;
-      Printf.fprintf oc " goto %d%s" fallthrough sep
+      Printf.fprintf oc " goto %d%s" successor sep
   | Tailcall (Self _) -> Printf.fprintf oc "Tailcall self%s" sep
   | Tailcall (Func _) -> Printf.fprintf oc "Tailcall%s" sep
 
