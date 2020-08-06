@@ -68,39 +68,6 @@ module S = struct
     val kg : t -> Node.t -> K.t
   end
 
-  (* Identifier for an instruction in the cfg. *)
-  module Inst_id = struct
-    module T = struct
-      type t
-        = Inst of Label.t * int
-        | Term of Label.t
-
-      let compare a b =
-        match a, b with
-        | Term la, Term lb -> Label.compare la lb
-        | Term la, Inst (lb, _) ->
-          (match Label.compare la lb with
-          | 0 -> 1
-          | c -> c)
-        | Inst (la, _), Term lb ->
-          (match Label.compare la lb with
-          | 0 -> -1
-          | c -> c)
-        | Inst (la, ia), Inst (lb, ib) ->
-          match Label.compare la lb with
-          | 0 -> ia - ib
-          | c -> c
-
-      let parent = function
-        | Inst(p, _) -> p
-        | Term p -> p
-    end
-
-    include T
-    module Map = Map.Make(T)
-    module Set = Set.Make(T)
-  end
-
   (* Data-flow problem explicitly for the cfg. *)
   module type CfgKillGenProblem = sig
     module K : KillGen

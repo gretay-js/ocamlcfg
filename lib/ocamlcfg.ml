@@ -41,6 +41,8 @@ module Passes = struct
   let simplify_terminators = Simplify_terminator.run
 
   let add_extra_debug = Extra_debug.add
+
+  let slot_to_register = Slot_to_register.run
 end
 
 module Util = struct

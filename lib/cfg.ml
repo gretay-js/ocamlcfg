@@ -360,7 +360,7 @@ let destroyed_at_alloc =
   Array.concat [regs; destroyed_by_plt_stub]
 
 [@@@ocaml.warning "+a-30-40-41-42-4"]
-let destroyed_at_instruction = function
+let destroyed_at_basic = function
   | Op (Intop (Idiv | Imod))
   | Op (Intop_imm((Idiv | Imod), _)) ->
     [| rax; rdx |]

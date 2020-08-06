@@ -67,7 +67,7 @@ val fun_name : t -> string
 
 val is_exit : basic_block -> bool
 
-val destroyed_at_instruction : basic -> int array
+val destroyed_at_basic : basic -> int array
 
 val destroyed_at_terminator : terminator -> int array
 
@@ -109,6 +109,8 @@ val iter_blocks : t -> f:(Label.t -> basic_block -> unit) -> unit
 val blocks : t -> basic_block list
 
 (** Printing *)
+
+val print_reg : out_channel -> Reg.t -> unit
 
 val print_terminator :
   out_channel -> ?sep:string -> terminator instruction -> unit

@@ -188,7 +188,8 @@ module Make_backward_cfg_solver (P: CfgKillGenProblem) = struct
     let next t = cfg_prev (P.cfg t)
     let prev t = cfg_next (P.cfg t)
 
-    let start_node _ block = Node.Term block
+    let start_node _ block =
+      Node.Term block
 
     let next_node t = function
       | Node.Term block ->
@@ -208,3 +209,28 @@ module Make_backward_cfg_solver (P: CfgKillGenProblem) = struct
 
   let solve = let module M = Make_kill_gen_solver(T) in M.solve
 end
+
+let get_inst cfg = function
+  | Inst_id.Term block ->
+    let bb = Cfg.get_block_exn cfg block in
+    `Term bb.Cfg.terminator
+  | Inst_id.Inst(block, n) ->
+    let bb = Cfg.get_block_exn cfg block in
+    `Basic (List.nth bb.Cfg.body n)
+
+let get_preceding_terminators cfg block =
+  Cfg.get_block_exn cfg block
+  |> Cfg.predecessor_labels
+  |> List.map (fun l -> Inst_id.Term l)
+
+let get_pred_insts cfg = function
+  | Inst_id.Term block ->
+    let bb = Cfg.get_block_exn cfg block in
+    (match bb.body with
+    | [] -> get_preceding_terminators cfg block
+    | insts ->
+      [Inst_id.Inst (block, List.length insts - 1)])
+  | Inst_id.Inst (block, 0) ->
+    get_preceding_terminators cfg block
+  | Inst_id.Inst (block, n) ->
+    [Inst_id.Inst (block, n - 1)]

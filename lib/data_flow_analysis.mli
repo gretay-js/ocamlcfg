@@ -22,3 +22,12 @@ module Make_backward_cfg_solver (P: CfgKillGenProblem) : sig
   (* Functor to build a backward solver on the cfg. *)
   val solve : P.t -> (P.K.S.t * P.K.S.t) Inst_id.Map.t
 end
+
+(* Helper to look up an instruction in the cfg. *)
+val get_inst
+  :  Cfg.t
+  -> Inst_id.t
+  -> [`Basic of Cfg.basic Cfg.instruction|`Term of Cfg.terminator Cfg.instruction]
+
+(* Returns all the predecessors of an instruction. *)
+val get_pred_insts : Cfg.t -> Inst_id.t -> Inst_id.t list

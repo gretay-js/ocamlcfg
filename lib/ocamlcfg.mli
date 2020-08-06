@@ -52,7 +52,7 @@ module Cfg : sig
 
   val fun_tailrec_entry_point_label : t -> Label.t
 
-  val destroyed_at_instruction : basic -> int array
+  val destroyed_at_basic : basic -> int array
 
   val destroyed_at_terminator : terminator -> int array
 
@@ -104,6 +104,8 @@ module Passes : sig
   val add_extra_debug : Cfg.t -> file:string -> unit
 
   val simplify_terminators : Cfg.t -> unit
+
+  val slot_to_register : Cfg.t -> unit
 end
 
 module Util : sig
@@ -118,6 +120,11 @@ module Analysis : sig
   include module type of struct
     include Data_flow_analysis_intf.S
   end
+
+  val get_inst
+    :  Cfg.t
+    -> Inst_id.t
+    -> [`Basic of Cfg.basic Cfg.instruction|`Term of Cfg.terminator Cfg.instruction]
 
   module Make_solver (P: Problem) : sig
     val solve : P.t -> (P.S.t * P.S.t) P.Node.Map.t
