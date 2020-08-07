@@ -92,7 +92,7 @@ module Problem = struct
     let spill r loc reg_class =
       { K.kills = RegSet.empty; gens = Slot.Map.singleton { Slot.loc; reg_class} r }
     in
-    match get_inst t id with
+    match Inst_id.get_inst t id with
     | `Term term ->
       kill term.res (destroyed_at_terminator term.desc)
     | `Basic ({ desc = Op Move; _ } as i) ->

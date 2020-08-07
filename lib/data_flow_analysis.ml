@@ -155,15 +155,15 @@ module Make_forward_cfg_solver (P: CfgKillGenProblem) = struct
     let start_node t block =
       let bb = Cfg.get_block_exn (P.cfg t) block in
       match bb.body with
-      | [] -> Node.Term block
-      | _ -> Node.Inst (block, 0)
+      | [] -> Inst_id.Term block
+      | _ -> Inst_id.Inst (block, 0)
 
     let next_node t = function
-      | Node.Term _ -> None
-      | Node.Inst(block, n) ->
+      | Inst_id.Term _ -> None
+      | Inst_id.Inst(block, n) ->
         let bb = Cfg.get_block_exn (P.cfg t) block in
-        if n + 1 = List.length bb.body then Some (Node.Term block)
-        else Some (Node.Inst (block, n + 1))
+        if n + 1 = List.length bb.body then Some (Inst_id.Term block)
+        else Some (Inst_id.Inst (block, n + 1))
 
     let entry = P.entry
     let empty = P.empty
@@ -189,18 +189,18 @@ module Make_backward_cfg_solver (P: CfgKillGenProblem) = struct
     let prev t = cfg_next (P.cfg t)
 
     let start_node _ block =
-      Node.Term block
+      Inst_id.Term block
 
     let next_node t = function
-      | Node.Term block ->
+      | Inst_id.Term block ->
         let bb = Cfg.get_block_exn (P.cfg t) block in
         (match bb.body with
         | [] -> None
-        | insts -> Some (Node.Inst (block, List.length insts - 1)))
-      | Node.Inst (_, 0) ->
+        | insts -> Some (Inst_id.Inst (block, List.length insts - 1)))
+      | Inst_id.Inst (_, 0) ->
         None
-      | Node.Inst (block, n) ->
-        Some (Node.Inst (block, n - 1))
+      | Inst_id.Inst (block, n) ->
+        Some (Inst_id.Inst (block, n - 1))
 
     let entry = P.entry
     let empty = P.empty
@@ -209,28 +209,3 @@ module Make_backward_cfg_solver (P: CfgKillGenProblem) = struct
 
   let solve = let module M = Make_kill_gen_solver(T) in M.solve
 end
-
-let get_inst cfg = function
-  | Inst_id.Term block ->
-    let bb = Cfg.get_block_exn cfg block in
-    `Term bb.Cfg.terminator
-  | Inst_id.Inst(block, n) ->
-    let bb = Cfg.get_block_exn cfg block in
-    `Basic (List.nth bb.Cfg.body n)
-
-let get_preceding_terminators cfg block =
-  Cfg.get_block_exn cfg block
-  |> Cfg.predecessor_labels
-  |> List.map (fun l -> Inst_id.Term l)
-
-let get_pred_insts cfg = function
-  | Inst_id.Term block ->
-    let bb = Cfg.get_block_exn cfg block in
-    (match bb.body with
-    | [] -> get_preceding_terminators cfg block
-    | insts ->
-      [Inst_id.Inst (block, List.length insts - 1)])
-  | Inst_id.Inst (block, 0) ->
-    get_preceding_terminators cfg block
-  | Inst_id.Inst (block, n) ->
-    [Inst_id.Inst (block, n - 1)]

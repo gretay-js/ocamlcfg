@@ -116,15 +116,34 @@ module Util : sig
   val print_assembly : Cfg.Basic_block.t list -> unit
 end
 
+module Inst_id : sig
+  type t
+
+  val at_terminator : Label.t -> t
+
+  val at_instruction : Label.t -> int -> t
+
+  val compare : t -> t -> int
+
+  val equal : t -> t -> bool
+
+  val parent : t -> Label.t
+
+  module Map : Map.S with type key := t
+  module Set : Set.S with type elt := t
+
+  val get_inst
+    :  Cfg.t
+    -> t
+    -> [ `Basic of Cfg.basic Cfg.instruction | `Term of Cfg.terminator Cfg.instruction]
+
+  val get_predecessors_of_inst : Cfg.t -> t -> t list
+end
+
 module Analysis : sig
   include module type of struct
     include Data_flow_analysis_intf.S
   end
-
-  val get_inst
-    :  Cfg.t
-    -> Inst_id.t
-    -> [`Basic of Cfg.basic Cfg.instruction|`Term of Cfg.terminator Cfg.instruction]
 
   module Make_solver (P: Problem) : sig
     val solve : P.t -> (P.S.t * P.S.t) P.Node.Map.t

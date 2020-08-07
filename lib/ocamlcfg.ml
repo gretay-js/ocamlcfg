@@ -53,6 +53,10 @@ module Util = struct
   let print_assembly = Cfg_to_linear.print_assembly
 end
 
+module Inst_id = struct
+  include Inst_id
+end
+
 module Analysis = struct
   include Data_flow_analysis
 end
