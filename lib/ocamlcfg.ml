@@ -43,6 +43,8 @@ module Passes = struct
   let add_extra_debug = Extra_debug.add
 
   let slot_to_register = Slot_to_register.run
+
+  let verify_liveness = Verify_liveness.run
 end
 
 module Util = struct

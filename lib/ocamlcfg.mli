@@ -106,6 +106,8 @@ module Passes : sig
   val simplify_terminators : Cfg.t -> unit
 
   val slot_to_register : Cfg.t -> unit
+
+  val verify_liveness : Cfg.t -> unit
 end
 
 module Util : sig
