@@ -312,10 +312,7 @@ let adjust_liveness live_out inst =
             match reg_or_live with
             | Liveness.Live -> live
             | Liveness.Extended(reg, _)
-            | Liveness.ExtendedLive(reg, _) ->
-              if Reg.Set.is_empty live
-                then live
-                else Reg.Set.add reg live)
+            | Liveness.ExtendedLive(reg, _) -> Reg.Set.add reg live)
           live_out
       |> Reg.Set.filter
           (fun r ->
@@ -376,12 +373,12 @@ let run cfg =
       let body, _ = List.fold_left
         (fun (body, n) i->
           match Inst_id.Map.find (Inst_id.Inst(label, n)) solution with
-          | live_out, _ when not (Slot.Map.is_empty live_out) ->
+          | live_out, _ ->
             let i' = adjust_liveness live_out i in
             ((match i'.Cfg.desc with
-            | Cfg.Op Cfg.Spill ->
-              (match i'.Cfg.res with
-              | [| { Reg.loc = Reg.Stack (Reg.Local loc); _ } as r |] ->
+            | Cfg.Op Cfg.Move | Cfg.Op Cfg.Reload | Cfg.Op Cfg.Spill ->
+              (match i'.Cfg.arg, i'.Cfg.res with
+              | _, [| { Reg.loc = Reg.Stack (Reg.Local loc); _ } as r |] ->
                 let slot = { Slot.loc; reg_class = Proc.register_class r} in
                 (match Slot.Map.find slot live_out with
                 | Live | ExtendedLive _ ->
@@ -390,16 +387,13 @@ let run cfg =
                 | Extended _ ->
                   (* All uses of the slot were replaced with the register *)
                   body)
-              | _ -> i' :: body)
-            | Cfg.Op Cfg.Move | Cfg.Op Cfg.Reload ->
-              (match i'.Cfg.arg, i'.Cfg.res with
               | [| arg |], [| res |] when arg.Reg.loc = res.Reg.loc ->
                 (* A reload was turned into a NOP - erase it. *)
                 body
-              | _ -> i' :: body)
+              | _ ->
+                i' :: body)
             | _ ->
               i' :: body), n + 1)
-          | _
           | exception Not_found ->
             i :: body, n + 1)
         ([], 0)
