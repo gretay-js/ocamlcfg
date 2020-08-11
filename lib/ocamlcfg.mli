@@ -57,14 +57,14 @@ module Cfg : sig
   val destroyed_at_terminator : terminator -> int array
 
   val print_terminator
-    :  out_channel
+    :  Format.formatter
     -> ?sep:string
     -> terminator instruction
     -> unit
 
-  val print_basic : out_channel -> basic instruction -> unit
+  val print_basic : Format.formatter -> basic instruction -> unit
 
-  val print : t -> out_channel -> string -> unit
+  val print : t -> Format.formatter -> string -> unit
 end
 
 module Cfg_with_layout : sig
@@ -85,7 +85,7 @@ module Cfg_with_layout : sig
     string ->
     unit
 
-  val print : t -> out_channel -> string -> unit
+  val print : t -> Format.formatter -> string -> unit
 
   val preserve_orig_labels : t -> bool
 

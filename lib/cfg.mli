@@ -110,12 +110,12 @@ val blocks : t -> basic_block list
 
 (** Printing *)
 
-val print_reg : out_channel -> Reg.t -> unit
+val print_reg : Format.formatter -> Reg.t -> unit
 
 val print_terminator :
-  out_channel -> ?sep:string -> terminator instruction -> unit
+  Format.formatter -> ?sep:string -> terminator instruction -> unit
 
-val print_basic : out_channel -> basic instruction -> unit
+val print_basic : Format.formatter -> basic instruction -> unit
 
 (* CR-someday gyorsh: Current version of cfg is a half-way house in terms of
    its exception handling. It has a lot of redundancy and the result of the
@@ -133,4 +133,4 @@ val print_basic : out_channel -> basic instruction -> unit
 (* CR-someday gyorsh: store label after separately and update after
    reordering. *)
 
-val print : t -> out_channel -> string -> unit
+val print : t -> Format.formatter -> string -> unit

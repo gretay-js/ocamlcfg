@@ -186,8 +186,8 @@ let blocks t = List.map snd (Label.Tbl.to_list t.blocks)
 
 let intcomp (comp : Mach.integer_comparison) =
   match comp with
-  | Isigned c -> Printf.sprintf " %ss " (Printcmm.integer_comparison c)
-  | Iunsigned c -> Printf.sprintf " %su " (Printcmm.integer_comparison c)
+  | Isigned c -> Format.sprintf " %ss " (Printcmm.integer_comparison c)
+  | Iunsigned c -> Format.sprintf " %su " (Printcmm.integer_comparison c)
 
 let intop (op : Mach.integer_operation) =
   match op with
@@ -207,43 +207,43 @@ let intop (op : Mach.integer_operation) =
   | Icheckbound _ -> assert false
 
 let print_op oc = function
-  | Move -> Printf.fprintf oc "mov"
-  | Spill -> Printf.fprintf oc "spill"
-  | Reload -> Printf.fprintf oc "reload"
-  | Const_int n -> Printf.fprintf oc "const_int %nd" n
-  | Const_float f -> Printf.fprintf oc "const_float %Ld" f
-  | Const_symbol s -> Printf.fprintf oc "const_symbol %s" s
-  | Stackoffset n -> Printf.fprintf oc "stackoffset %d" n
-  | Load _ -> Printf.fprintf oc "load"
-  | Store _ -> Printf.fprintf oc "store"
-  | Intop op -> Printf.fprintf oc "intop %s" (intop op)
-  | Intop_imm (op, n) -> Printf.fprintf oc "intop %s %d" (intop op) n
-  | Negf -> Printf.fprintf oc "negf"
-  | Absf -> Printf.fprintf oc "absf"
-  | Addf -> Printf.fprintf oc "addf"
-  | Subf -> Printf.fprintf oc "subf"
-  | Mulf -> Printf.fprintf oc "mulf"
-  | Divf -> Printf.fprintf oc "divf"
-  | Floatofint -> Printf.fprintf oc "floattoint"
-  | Intoffloat -> Printf.fprintf oc "intoffloat"
-  | Specific _ -> Printf.fprintf oc "specific"
+  | Move -> Format.fprintf oc "mov"
+  | Spill -> Format.fprintf oc "spill"
+  | Reload -> Format.fprintf oc "reload"
+  | Const_int n -> Format.fprintf oc "const_int %nd" n
+  | Const_float f -> Format.fprintf oc "const_float %Ld" f
+  | Const_symbol s -> Format.fprintf oc "const_symbol %s" s
+  | Stackoffset n -> Format.fprintf oc "stackoffset %d" n
+  | Load _ -> Format.fprintf oc "load"
+  | Store _ -> Format.fprintf oc "store"
+  | Intop op -> Format.fprintf oc "intop %s" (intop op)
+  | Intop_imm (op, n) -> Format.fprintf oc "intop %s %d" (intop op) n
+  | Negf -> Format.fprintf oc "negf"
+  | Absf -> Format.fprintf oc "absf"
+  | Addf -> Format.fprintf oc "addf"
+  | Subf -> Format.fprintf oc "subf"
+  | Mulf -> Format.fprintf oc "mulf"
+  | Divf -> Format.fprintf oc "divf"
+  | Floatofint -> Format.fprintf oc "floattoint"
+  | Intoffloat -> Format.fprintf oc "intoffloat"
+  | Specific _ -> Format.fprintf oc "specific"
   | Probe { name; handler_code_sym } ->
-      Printf.fprintf oc "probe %s %s" name handler_code_sym
-  | Probe_is_enabled { name } -> Printf.fprintf oc "probe_is_enabled %s" name
-  | Name_for_debugger _ -> Printf.fprintf oc "name_for_debugger"
+      Format.fprintf oc "probe %s %s" name handler_code_sym
+  | Probe_is_enabled { name } -> Format.fprintf oc "probe_is_enabled %s" name
+  | Name_for_debugger _ -> Format.fprintf oc "name_for_debugger"
 
 let print_call oc = function
   | P prim_call -> (
       match prim_call with
       | External { func_symbol : string; _ } ->
-          Printf.fprintf oc "external %s" func_symbol
-      | Alloc { bytes : int; _ } -> Printf.fprintf oc "alloc %d" bytes
-      | Checkbound _ -> Printf.fprintf oc "checkbound" )
+          Format.fprintf oc "external %s" func_symbol
+      | Alloc { bytes : int; _ } -> Format.fprintf oc "alloc %d" bytes
+      | Checkbound _ -> Format.fprintf oc "checkbound" )
   | F func_call -> (
       match func_call with
-      | Indirect _ -> Printf.fprintf oc "indirect"
+      | Indirect _ -> Format.fprintf oc "indirect"
       | Direct { func_symbol : string; _ } ->
-          Printf.fprintf oc "direct %s" func_symbol )
+          Format.fprintf oc "direct %s" func_symbol )
 
 let print_reg oc r =
   let name = if Reg.anonymous r then "" else Reg.name r in
@@ -254,71 +254,71 @@ let print_reg oc r =
     | Int -> "I"
     | Float -> "F"
   in
-  Printf.fprintf oc "(%s:%s/%d " name ty r.stamp;
+  Format.fprintf oc "(%s:%s/%d " name ty r.stamp;
   match r.loc with
   | Unknown -> ()
-  | Reg r -> Printf.fprintf oc "[%s])" (Proc.register_name r)
-  | Stack(Local s) -> Printf.fprintf oc "[s%i])" s
-  | Stack(Incoming s) -> Printf.fprintf oc "[si%i])" s
-  | Stack(Outgoing s) -> Printf.fprintf oc "[so%i])" s
+  | Reg r -> Format.fprintf oc "[%s])" (Proc.register_name r)
+  | Stack(Local s) -> Format.fprintf oc "[s%i])" s
+  | Stack(Incoming s) -> Format.fprintf oc "[si%i])" s
+  | Stack(Outgoing s) -> Format.fprintf oc "[so%i])" s
 
 let print_basic oc i =
-  Printf.fprintf oc "%d: " i.id;
+  Format.fprintf oc "%d: " i.id;
   (match i.desc with
   | Op op -> print_op oc op
-  | Reloadretaddr -> Printf.fprintf oc "Reloadretaddr"
+  | Reloadretaddr -> Format.fprintf oc "Reloadretaddr"
   | Pushtrap { lbl_handler } ->
-      Printf.fprintf oc "Pushtrap handler=%d" lbl_handler
-  | Poptrap -> Printf.fprintf oc "Poptrap"
-  | Prologue -> Printf.fprintf oc "Prologue");
-  Array.iter (Printf.fprintf oc " %a" print_reg) i.arg;
-  Printf.fprintf oc " ->";
-  Array.iter (Printf.fprintf oc " %a" print_reg) i.res
+      Format.fprintf oc "Pushtrap handler=%d" lbl_handler
+  | Poptrap -> Format.fprintf oc "Poptrap"
+  | Prologue -> Format.fprintf oc "Prologue");
+  Array.iter (Format.fprintf oc " %a" print_reg) i.arg;
+  Format.fprintf oc " ->";
+  Array.iter (Format.fprintf oc " %a" print_reg) i.res
 
 let print_terminator oc ?(sep = "\n") ti =
-  Printf.fprintf oc "%d:" ti.id;
-  Array.iter (Printf.fprintf oc " %a" print_reg) ti.arg;
-  Printf.fprintf oc " ->";
-  Array.iter (Printf.fprintf oc " %a" print_reg) ti.res;
-  Printf.fprintf oc "%s" sep;
+  Format.fprintf oc "%d:" ti.id;
+  Array.iter (Format.fprintf oc " %a" print_reg) ti.arg;
+  Format.fprintf oc " ->";
+  Array.iter (Format.fprintf oc " %a" print_reg) ti.res;
+  Format.fprintf oc "%s" sep;
   match ti.desc with
-  | Never -> Printf.fprintf oc "deadend%s" sep
-  | Always l -> Printf.fprintf oc "goto %d%s" l sep
+  | Never -> Format.fprintf oc "deadend%s" sep
+  | Always l -> Format.fprintf oc "goto %d%s" l sep
   | Parity_test { ifso; ifnot } ->
-      Printf.fprintf oc "if even goto %d%sif odd goto %d%s" ifso sep ifnot
+      Format.fprintf oc "if even goto %d%sif odd goto %d%s" ifso sep ifnot
         sep
   | Truth_test { ifso; ifnot } ->
-      Printf.fprintf oc "if true goto %d%sif false goto %d%s" ifso sep ifnot
+      Format.fprintf oc "if true goto %d%sif false goto %d%s" ifso sep ifnot
         sep
   | Float_test { lt; eq; gt; uo } ->
-      Printf.fprintf oc "if < goto %d%s" lt sep;
-      Printf.fprintf oc "if = goto %d%s" eq sep;
-      Printf.fprintf oc "if > goto %d%s" gt sep;
-      Printf.fprintf oc "if uo goto %d%s" uo sep
+      Format.fprintf oc "if < goto %d%s" lt sep;
+      Format.fprintf oc "if = goto %d%s" eq sep;
+      Format.fprintf oc "if > goto %d%s" gt sep;
+      Format.fprintf oc "if uo goto %d%s" uo sep
   | Int_test { lt; eq; gt; is_signed; imm } ->
       let cmp =
-        Printf.sprintf " %s%s"
+        Format.sprintf " %s%s"
           (if is_signed then "s" else "u")
           ( match imm with
           | None -> ""
           | Some i -> " " ^ Int.to_string i )
       in
-      Printf.fprintf oc "if <%s goto %d%s" cmp lt sep;
-      Printf.fprintf oc "if =%s goto %d%s" cmp eq sep;
-      Printf.fprintf oc "if >%s goto %d%s" cmp gt sep
+      Format.fprintf oc "if <%s goto %d%s" cmp lt sep;
+      Format.fprintf oc "if =%s goto %d%s" cmp eq sep;
+      Format.fprintf oc "if >%s goto %d%s" cmp gt sep
   | Switch labels ->
-      Printf.fprintf oc "switch%s" sep;
+      Format.fprintf oc "switch%s" sep;
       for i = 0 to Array.length labels - 1 do
-        Printf.fprintf oc "case %d: goto %d%s" i labels.(i) sep
+        Format.fprintf oc "case %d: goto %d%s" i labels.(i) sep
       done
-  | Return -> Printf.fprintf oc "Return%s" sep
-  | Raise _ -> Printf.fprintf oc "Raise%s" sep
+  | Return -> Format.fprintf oc "Return%s" sep
+  | Raise _ -> Format.fprintf oc "Raise%s" sep
   | Call { call_operation; successor } ->
-      Printf.fprintf oc "Call ";
+      Format.fprintf oc "Call ";
       print_call oc call_operation;
-      Printf.fprintf oc " goto %d%s" successor sep
-  | Tailcall (Self _) -> Printf.fprintf oc "Tailcall self%s" sep
-  | Tailcall (Func _) -> Printf.fprintf oc "Tailcall%s" sep
+      Format.fprintf oc " goto %d%s" successor sep
+  | Tailcall (Self _) -> Format.fprintf oc "Tailcall self%s" sep
+  | Tailcall (Func _) -> Format.fprintf oc "Tailcall%s" sep
 
 
 (*
@@ -403,22 +403,22 @@ let destroyed_at_terminator = function
     if Config.with_frame_pointers then [| rbp |] else [||]
 
 let print t oc msg =
-  Printf.fprintf oc "cfg for %s\n" msg;
-  Printf.fprintf oc "%s\n" t.fun_name;
-  Printf.fprintf oc "blocks.length=%d\n" (Label.Tbl.length t.blocks);
+  Format.fprintf oc "cfg for %s\n" msg;
+  Format.fprintf oc "%s\n" t.fun_name;
+  Format.fprintf oc "blocks.length=%d\n" (Label.Tbl.length t.blocks);
   let print_block label block =
-    Printf.fprintf oc "\n\n\n%d:\n" label;
-    List.iter (fun inst -> Printf.fprintf oc "  %a\n" print_basic inst) block.body;
-    Printf.fprintf oc "  ";
+    Format.fprintf oc "\n\n\n%d:\n" label;
+    List.iter (fun inst -> Format.fprintf oc "  %a\n" print_basic inst) block.body;
+    Format.fprintf oc "  ";
     print_terminator oc block.terminator;
-    Printf.fprintf oc "\npredecessors:";
-    Label.Set.iter (Printf.fprintf oc " %d") block.predecessors;
-    Printf.fprintf oc "\nsuccessors:";
-    Label.Set.iter (Printf.fprintf oc " %d")
+    Format.fprintf oc "\npredecessors:";
+    Label.Set.iter (Format.fprintf oc " %d") block.predecessors;
+    Format.fprintf oc "\nsuccessors:";
+    Label.Set.iter (Format.fprintf oc " %d")
       (successor_labels ~normal:true ~exn:false t block);
-    Printf.fprintf oc "\nexn-successors:";
-    Label.Set.iter (Printf.fprintf oc " %d")
+    Format.fprintf oc "\nexn-successors:";
+    Label.Set.iter (Format.fprintf oc " %d")
       (successor_labels ~normal:false ~exn:true t block)
   in
   Label.Tbl.iter print_block t.blocks;
-  Printf.fprintf oc "\n"
+  Format.fprintf oc "\n"

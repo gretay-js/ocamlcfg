@@ -33,4 +33,4 @@ val save_as_dot :
   string ->
   unit
 
-val print : t -> out_channel -> string -> unit
+val print : t -> Format.formatter -> string -> unit
