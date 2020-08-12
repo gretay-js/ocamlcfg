@@ -43,12 +43,19 @@ module type Problem = sig
 
   type t
 
+  (* CR lwhite: I'd probably use something like [entry_nodes] rather than
+     [entries]. "entries" has other meanings e.g. the entries in a set or map, which can
+     easily be confused. *)
   val entries : t -> Node.Set.t
 
   val next : t -> Node.t -> Node.t list
   val prev : t -> Node.t -> Node.t list
 
+  (* CR lwhite: I think that [empty] is supposed to always be the bottom element of the
+     semilattice. i.e. lub empty x = x. So it might make more sense to put it in the
+     [Semilattice] module type without any parameters. *)
   val empty : t -> Node.t -> S.t
+
   val entry : t -> Node.t -> S.t
   val f : t -> Node.t -> S.t -> S.t
 end
@@ -57,6 +64,10 @@ end
 module type Semigroup_action_problem = sig
   module A : Semigroup_action
 
+  (* CR lwhite: You are keeping the names very general here, but that makes it less clear
+     what you are trying to do. I think it is fine to use names related to basic blocks
+     and instructions, to make it clear what is going on. So I'd suggest s/Parent/Block/
+     and s/Node/Instruction/. *)
   module Parent : Node_id
 
   module Node : sig
@@ -76,6 +87,10 @@ module type Semigroup_action_problem = sig
 
   val empty : t -> Parent.t -> A.S.t
   val entry : t -> Parent.t -> A.S.t
+
+  (* CR lwhite: Thanks to the rename, the name [kg] no longer
+     has an obvious meaning. Perhaps [transfer_function] or
+     [action]? *)
   val kg : t -> Node.t -> A.G.t
 end
 

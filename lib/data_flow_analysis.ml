@@ -60,6 +60,8 @@ module Make_solver (P: Problem) = struct
         match Map.find n solution with
         | { sol_out = sol_out'; sol_in = sol_in' }
           when P.S.equal sol_in' sol_in && P.S.equal sol_out' sol_out ->
+          (* CR lwhite: Not immediately clear to me why we need
+             to check that the input did not change .*)
           fixpoint solution q
         | _
         | exception Not_found ->
@@ -82,6 +84,9 @@ module Make_kill_gen_solver (P: Semigroup_action_problem) = struct
       }
 
     let entries { pt; _ } = P.entries pt
+    (* CR lwhite: This is a somewhat subjective matter of taste, but
+       I think that these definitions would be clearer (and slightly
+       more efficient) if they were eta-expanded. *)
     let next { pt; _ } = P.next pt
     let prev { pt; _ } = P.prev pt
     let empty { pt; _ } = P.empty pt
@@ -105,11 +110,12 @@ module Make_kill_gen_solver (P: Semigroup_action_problem) = struct
       in
       let rec dfs kill_gens parent =
         if ParentMap.mem parent kill_gens then kill_gens
-        else
+        else begin
           let start = P.start_node pt parent in
           let kg = advance start (P.kg pt start) in
           let kill_gens' = ParentMap.add parent kg kill_gens in
           List.fold_left dfs kill_gens' (P.next pt parent)
+        end
       in
       P.Parent.Set.fold (fun n kg -> dfs kg n) (P.entries pt) ParentMap.empty
     in
@@ -140,8 +146,6 @@ let cfg_next cfg node =
 let cfg_prev cfg node =
   let block = Cfg.get_block_exn cfg node in
   Cfg.predecessor_labels block
-
-
 
 module Make_forward_cfg_solver (P: Cfg_semigroup_action_problem) = struct
   module T = struct
@@ -176,6 +180,8 @@ module Make_forward_cfg_solver (P: Cfg_semigroup_action_problem) = struct
     let kg = P.kg
   end
 
+  (* CR lwhite: This is fine, but if you want you can just do
+     [include Make_kill_gen_solver(T)] *)
   let solve = let module M = Make_kill_gen_solver(T) in M.solve
 end
 
