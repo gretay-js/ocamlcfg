@@ -1,15 +1,3 @@
-(* XCR lwhite: [foo_intf] files do not normally contain module definitions. The point of
-   an [foo_intf] file is to define module types. It's a separate file because if you
-   define the module types in the main [foo] file then you have to repeat them in
-   the ml and mli.
-   It looks like you've copied the pattern from [cfg_intf], which is also doing slightly
-   the wrong thing. I suspect that what you actually want here is to define the various
-   module types and then definie a module *type* [S] that contains aliases to all of them
-
-   nlicker: removed S and retained only module types
-*)
-
-
 module type Semilattice = sig
   type t
 
@@ -113,13 +101,13 @@ module type Cfg_semigroup_action_problem = sig
   val kg : t -> Inst_id.t -> A.G.t
 end
 
-(** Solution to a data flow problem. *)
-type 's solution = { sol_in: 's; sol_out: 's }
-
 (** Solver for a data flow problem. *)
 module type Solver = sig
   (** Type of the input to the problem *)
   type t
+
+  (** Type of solutions to the problem *)
+  type 'a solution
 
   (** Type of the semilattice. *)
   module S : Semilattice
@@ -129,4 +117,47 @@ module type Solver = sig
 
   val solve : t -> S.t solution Node.Map.t
   (** Solver method *)
+end
+
+module type S = sig
+
+  module type Semilattice = Semilattice
+
+  module type Semigroup = Semigroup
+
+  module type Semigroup_action = Semigroup_action
+
+  module type Node_id = Node_id
+
+  module type Problem = Problem
+
+  module type Semigroup_action_problem = Semigroup_action_problem
+
+  module type Cfg_semigroup_action_problem = Cfg_semigroup_action_problem
+
+  (** Solution to a data flow problem. *)
+  type 's solution = { sol_in: 's; sol_out: 's }
+
+  module type Solver = Solver with type 'a solution := 'a solution
+
+  module Make_solver (P: Problem) : Solver
+    with type t := P.t
+     and module S := P.S
+     and module Node := P.Node
+
+  module Make_kill_gen_solver (P: Semigroup_action_problem) : Solver
+    with type t := P.t
+     and module S := P.A.S
+     and module Node := P.Node
+
+  module Make_forward_cfg_solver (P: Cfg_semigroup_action_problem) : Solver
+    with type t := P.t
+     and module S := P.A.S
+     and module Node := Inst_id
+
+  module Make_backward_cfg_solver (P: Cfg_semigroup_action_problem): Solver
+    with type t := P.t
+     and module S := P.A.S
+     and module Node := Inst_id
+
 end

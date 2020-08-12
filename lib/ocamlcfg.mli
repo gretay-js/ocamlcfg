@@ -143,9 +143,7 @@ module Inst_id : sig
 end
 
 module Analysis : sig
-  include module type of struct
-    include Data_flow_analysis_intf
-  end
+  include Data_flow_analysis_intf.S
 
   module type Cfg_semigroup_action_problem = sig
     module A : Semigroup_action

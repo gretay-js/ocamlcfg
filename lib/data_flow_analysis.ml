@@ -1,5 +1,9 @@
 include Data_flow_analysis_intf
 
+type 's solution = { sol_in: 's; sol_out: 's }
+
+module type Solver = Solver with type 'a solution := 'a solution
+
 module Make_queue (T: Node_id) : sig
   type t
   val empty : t
