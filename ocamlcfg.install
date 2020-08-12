@@ -115,6 +115,7 @@ lib: [
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Trap_stack.cmx"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Verify_liveness.cmi"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Verify_liveness.cmt"
+  "_build/install/default/lib/ocamlcfg/ocamlcfg__Verify_liveness.cmti"
   "_build/install/default/lib/ocamlcfg/ocamlcfg__Verify_liveness.cmx"
   "_build/install/default/lib/ocamlcfg/opam"
   "_build/install/default/lib/ocamlcfg/simplify_terminator.ml"
@@ -124,6 +125,7 @@ lib: [
   "_build/install/default/lib/ocamlcfg/trap_stack.ml"
   "_build/install/default/lib/ocamlcfg/trap_stack.mli"
   "_build/install/default/lib/ocamlcfg/verify_liveness.ml"
+  "_build/install/default/lib/ocamlcfg/verify_liveness.mli"
 ]
 doc: [
   "_build/install/default/doc/ocamlcfg/LICENSE.md"

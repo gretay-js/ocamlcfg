@@ -1,4 +1,4 @@
-include Data_flow_analysis_intf.S
+include Data_flow_analysis_intf
 
 module Make_queue (T: Node_id) : sig
   type t
@@ -40,7 +40,7 @@ module Make_solver (P: Problem) = struct
           List.map
             (fun prev ->
               match Map.find prev solution with
-              | (_, sol_out) -> sol_out
+              | { sol_out; _ } -> sol_out
               | exception Not_found -> P.empty t prev)
             (P.prev t n)
         in
@@ -54,27 +54,27 @@ module Make_solver (P: Problem) = struct
         in
         let sol_out = P.f t n sol_in in
         match Map.find n solution with
-        | (sol_in', sol_out')
+        | { sol_out = sol_out'; sol_in = sol_in' }
           when P.S.equal sol_in' sol_in && P.S.equal sol_out' sol_out ->
           fixpoint solution q
         | _
         | exception Not_found ->
-          let solution' = Map.add n (sol_in, sol_out) solution in
+          let solution' = Map.add n { sol_in; sol_out } solution in
           fixpoint solution' (List.fold_left Q.push q (P.next t n))
     in
     fixpoint P.Node.Map.empty q
 end
 
-module Make_kill_gen_solver (P: KillGenProblem) = struct
+module Make_kill_gen_solver (P: Semigroup_action_problem) = struct
   module ParentMap = P.Parent.Map
 
   module T = struct
-    module S = P.K.S
+    module S = P.A.S
     module Node = P.Parent
 
     type t =
       { pt: P.t
-      ; kill_gens: P.K.t ParentMap.t
+      ; kill_gens: P.A.G.t ParentMap.t
       }
 
     let entries { pt; _ } = P.entries pt
@@ -84,7 +84,7 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
     let entry { pt; _ } = P.entry pt
 
     let f { kill_gens; _ } n sol =
-      P.K.f sol (ParentMap.find n kill_gens)
+      P.A.f sol (ParentMap.find n kill_gens)
   end
 
   module Parent_solver = Make_solver(T)
@@ -97,7 +97,7 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
         | None -> kg
         | Some node' ->
           let kg' = P.kg pt node' in
-          advance node' (P.K.dot kg' kg)
+          advance node' (P.A.G.dot kg' kg)
       in
       let rec dfs kill_gens parent =
         if ParentMap.mem parent kill_gens then kill_gens
@@ -114,11 +114,11 @@ module Make_kill_gen_solver (P: KillGenProblem) = struct
     in
     T.Node.Map.fold
       (fun parent _ solution ->
-        let sol_in, _ = T.Node.Map.find parent parent_solution in
+        let { sol_in; _ } = T.Node.Map.find parent parent_solution in
         let rec advance node solution sol_in =
           let kg = P.kg pt node in
-          let sol_out = P.K.f sol_in kg in
-          let solution' = P.Node.Map.add node (sol_in, sol_out) solution in
+          let sol_out = P.A.f sol_in kg in
+          let solution' = P.Node.Map.add node { sol_in; sol_out } solution in
           match P.next_node pt node with
           | None -> solution'
           | Some node' ->
@@ -137,10 +137,12 @@ let cfg_prev cfg node =
   let block = Cfg.get_block_exn cfg node in
   Cfg.predecessor_labels block
 
-module Make_forward_cfg_solver (P: CfgKillGenProblem) = struct
+
+
+module Make_forward_cfg_solver (P: Cfg_semigroup_action_problem) = struct
   module T = struct
-    module S = P.K.S
-    module K = P.K
+    module S = P.A.S
+    module A = P.A
 
     module Parent = Label
     module Node = Inst_id
@@ -173,10 +175,10 @@ module Make_forward_cfg_solver (P: CfgKillGenProblem) = struct
   let solve = let module M = Make_kill_gen_solver(T) in M.solve
 end
 
-module Make_backward_cfg_solver (P: CfgKillGenProblem) = struct
+module Make_backward_cfg_solver (P: Cfg_semigroup_action_problem) = struct
   module T = struct
-    module S = P.K.S
-    module K = P.K
+    module S = P.A.S
+    module A = P.A
 
     module Parent = Label
     module Node = Inst_id

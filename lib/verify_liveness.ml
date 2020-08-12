@@ -29,20 +29,24 @@ module LocSet = struct
 end
 
 module Problem = struct
-  module K = struct
+  module A = struct
     module S = LocSet
 
-    type t =
-      { kill: LocSet.t
-      ; gen: LocSet.t
-      }
+    module G = struct
+      type t =
+        { kill: LocSet.t
+        ; gen: LocSet.t
+        }
 
-    let dot curr prev =
-      { kill = LocSet.union curr.kill prev.kill;
-        gen = LocSet.union curr.gen (LocSet.diff prev.gen curr.kill)
-      }
+      let dot curr prev =
+        { kill = LocSet.union curr.kill prev.kill;
+          gen = LocSet.union curr.gen (LocSet.diff prev.gen curr.kill)
+        }
 
-    let f s curr = LocSet.union curr.gen (LocSet.diff s curr.kill)
+      let f s curr = LocSet.union curr.gen (LocSet.diff s curr.kill)
+    end
+
+    let f = G.f
   end
 
   type t = Cfg.t
@@ -75,7 +79,7 @@ module Problem = struct
         if is_handler then LocSet.remove (reg_to_loc Proc.loc_exn_bucket) gen_inst
         else gen_inst
       in
-      { K.kill; gen }
+      { A.G.kill; gen }
     in
     match Inst_id.get_inst cfg id with
     | `Term i -> kill_gen i (Cfg.destroyed_at_terminator i.Cfg.desc)
@@ -86,7 +90,7 @@ module Solver = Make_backward_cfg_solver(Problem)
 
 let verify inst id ~solution =
   match Inst_id.Map.find id solution with
-  | live_out, _ ->
+  | { sol_in = live_out; _ } ->
     (* Check if the live-across set recorded in the instruction includes
      * the same locations as the one computed by the analysis. *)
     let live_across =

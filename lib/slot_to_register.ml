@@ -33,34 +33,37 @@ module SlotsInRegs = struct
 end
 
 module AvailableSlotProblem = struct
-  module K = struct
+  module A = struct
     module S = SlotsInRegs
 
-    type t =
-      { reg_kills: RegSet.t;
-        (* List of registers overwritten by the instruction *)
-        slot_kills: Slot.Set.t;
-        (* List of slots overwritten by the instruction. *)
-        gens: (Reg.t * int) Slot.Map.t
-        (* Spill instruction which writes a reg to stack *)
-      }
+    module G = struct
+      type t =
+        { reg_kills: RegSet.t;
+          (* List of registers overwritten by the instruction *)
+          slot_kills: Slot.Set.t;
+          (* List of slots overwritten by the instruction. *)
+          gens: (Reg.t * int) Slot.Map.t
+          (* Spill instruction which writes a reg to stack *)
+        }
 
-    let f s kg =
-      Slot.Map.merge
-        (fun slot gen prev ->
-          match gen, prev with
-          | Some _, _ -> gen
-          | None, Some _ when Slot.Set.mem slot kg.slot_kills -> None
-          | None, Some (_, r) when RegSet.mem r kg.reg_kills -> None
-          | None, _ -> prev)
-        kg.gens
-        s
+      let f s kg =
+        Slot.Map.merge
+          (fun slot gen prev ->
+            match gen, prev with
+            | Some _, _ -> gen
+            | None, Some _ when Slot.Set.mem slot kg.slot_kills -> None
+            | None, Some (_, r) when RegSet.mem r kg.reg_kills -> None
+            | None, _ -> prev)
+          kg.gens
+          s
+      let dot curr prev =
+        let reg_kills = RegSet.union curr.reg_kills prev.reg_kills in
+        let slot_kills = Slot.Set.union curr.slot_kills prev.slot_kills in
+        let gens = f prev.gens curr in
+        { reg_kills; slot_kills; gens }
+    end
 
-    let dot curr prev =
-      let reg_kills = RegSet.union curr.reg_kills prev.reg_kills in
-      let slot_kills = Slot.Set.union curr.slot_kills prev.slot_kills in
-      let gens = f prev.gens curr in
-      { reg_kills; slot_kills; gens }
+    let f = G.f
   end
 
   type t = Cfg.t
@@ -93,10 +96,10 @@ module AvailableSlotProblem = struct
         |> Slot.Set.of_list
       in
       let reg_kills = RegSet.union (RegSet.of_list (Array.to_list destroyed)) res_kills in
-      { K.reg_kills; slot_kills; gens = Slot.Map.empty }
+      { A.G.reg_kills; slot_kills; gens = Slot.Map.empty }
     in
     let spill r slot =
-      { K.reg_kills = RegSet.empty;
+      { A.G.reg_kills = RegSet.empty;
         slot_kills = Slot.Set.empty;
         gens = Slot.Map.singleton slot r }
     in
@@ -114,6 +117,39 @@ module AvailableSlotProblem = struct
     | `Basic i ->
       kill i.res (destroyed_at_basic i.desc)
 end
+
+module AvailableSlotSolver = Make_forward_cfg_solver(AvailableSlotProblem)
+
+let rewrite_reg id arg ~avail_in =
+  match arg.Reg.loc with
+  | Reg.Stack (Reg.Local loc)  ->
+    let reg_class = Proc.register_class arg in
+    let slot = { Slot.loc; reg_class} in
+    (match Slot.Map.find_opt slot avail_in with
+    | None ->
+      arg, []
+    | Some (reg, r) ->
+      { arg with loc = Reg.Reg r }, [(id, slot, (reg, r))])
+  | _ ->
+    arg, []
+
+let rewrite inst id ~solution ~fixup =
+  match Inst_id.Map.find id solution with
+  | { sol_in = avail_in; _ } ->
+    let new_fixups = ref fixup in
+    let arg =
+      Array.map
+        (fun r ->
+          if Array.mem r inst.Cfg.res then r else begin
+            let r', fixup = rewrite_reg id r ~avail_in in
+            new_fixups := fixup @ !new_fixups;
+            r'
+          end)
+        inst.Cfg.arg
+    in
+    { inst with arg }, !new_fixups
+  | exception Not_found ->
+    inst, []
 
 module Liveness = struct
   (* Describes the reason why a slot is live at a program point. *)
@@ -184,7 +220,7 @@ module Liveness = struct
 end
 
 module FixupProblem = struct
-  module K = struct
+  module A = struct
     module S = struct
       type t = Liveness.t Slot.Map.t
 
@@ -193,27 +229,31 @@ module FixupProblem = struct
       let equal = Slot.Map.equal (fun l r -> Liveness.equal l r)
     end
 
-    type t =
-      { kills: Slot.Set.t;
-        gens: Liveness.t Slot.Map.t;
-      }
+    module G = struct
+      type t =
+        { kills: Slot.Set.t;
+          gens: Liveness.t Slot.Map.t;
+        }
 
-    let f s kg =
-      Slot.Map.merge
-        (fun slot l r ->
-          let killed = Slot.Set.mem slot kg.kills in
-          match l, r with
-          | Some l', Some r' when not killed -> Some (Liveness.f l' r')
-          | _, Some _ -> r
-          | _, None when killed -> None
-          | _, None -> l)
-        s
-        kg.gens
+      let f s kg =
+        Slot.Map.merge
+          (fun slot l r ->
+            let killed = Slot.Set.mem slot kg.kills in
+            match l, r with
+            | Some l', Some r' when not killed -> Some (Liveness.f l' r')
+            | _, Some _ -> r
+            | _, None when killed -> None
+            | _, None -> l)
+          s
+          kg.gens
 
-    let dot curr prev =
-      let kills = Slot.Set.union curr.kills prev.kills in
-      let gens = f prev.gens curr in
-      { kills; gens }
+      let dot curr prev =
+        let kills = Slot.Set.union curr.kills prev.kills in
+        let gens = f prev.gens curr in
+        { kills; gens }
+    end
+
+    let f = G.f
   end
 
   type t =
@@ -268,41 +308,12 @@ module FixupProblem = struct
         arg_gens
     in
     match Inst_id.get_inst cfg id with
-    | `Term t -> { K.kills = kills t.Cfg.res; gens = gens t.Cfg.arg }
-    | `Basic i -> { K.kills = kills i.Cfg.res; gens = gens i.Cfg.arg }
+    | `Term t -> { A.G.kills = kills t.Cfg.res; gens = gens t.Cfg.arg }
+    | `Basic i -> { A.G.kills = kills i.Cfg.res; gens = gens i.Cfg.arg }
 
 end
 
-let rewrite_reg id arg ~avail_in =
-  match arg.Reg.loc with
-  | Reg.Stack (Reg.Local loc)  ->
-    let reg_class = Proc.register_class arg in
-    let slot = { Slot.loc; reg_class} in
-    (match Slot.Map.find_opt slot avail_in with
-    | None ->
-      arg, []
-    | Some (reg, r) ->
-      { arg with loc = Reg.Reg r }, [(id, slot, (reg, r))])
-  | _ ->
-    arg, []
-
-let rewrite inst id ~solution ~fixup =
-  match Inst_id.Map.find id solution with
-  | avail_in, _ ->
-    let new_fixups = ref fixup in
-    let arg =
-      Array.map
-        (fun r ->
-          if Array.mem r inst.Cfg.res then r else begin
-            let r', fixup = rewrite_reg id r ~avail_in in
-            new_fixups := fixup @ !new_fixups;
-            r'
-          end)
-        inst.Cfg.arg
-    in
-    { inst with arg }, !new_fixups
-  | exception Not_found ->
-    inst, []
+module FixupSolver = Make_backward_cfg_solver(FixupProblem)
 
 let adjust_liveness live_out inst =
   let live =
@@ -326,9 +337,6 @@ let adjust_liveness live_out inst =
             | _ -> true)
   in
   { inst with live }
-
-module AvailableSlotSolver = Make_forward_cfg_solver(AvailableSlotProblem)
-module FixupSolver = Make_backward_cfg_solver(FixupProblem)
 
 
 let run cfg =
@@ -373,7 +381,7 @@ let run cfg =
       let body, _ = List.fold_left
         (fun (body, n) i->
           match Inst_id.Map.find (Inst_id.Inst(label, n)) solution with
-          | live_out, _ ->
+          | { sol_in = live_out; _ } ->
             let i' = adjust_liveness live_out i in
             ((match i'.Cfg.desc with
             | Cfg.Op Cfg.Move | Cfg.Op Cfg.Reload | Cfg.Op Cfg.Spill ->
@@ -400,7 +408,7 @@ let run cfg =
         bb.body
       in
       (match Inst_id.Map.find (Inst_id.Term label) solution with
-      | live_out, _ when not (Slot.Map.is_empty live_out) ->
+      | { sol_in = live_out; _ } when not (Slot.Map.is_empty live_out) ->
         bb.terminator <- adjust_liveness live_out bb.terminator;
       | _
       | exception Not_found -> ());

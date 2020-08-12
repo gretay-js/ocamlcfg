@@ -1,24 +1,23 @@
-
 include module type of struct
-  include Data_flow_analysis_intf.S
+  include Data_flow_analysis_intf
 end
 
-module Make_solver (P: Problem) : sig
-  (* Functor to build a solver for a data-flow problem.g *)
-  val solve : P.t -> (P.S.t * P.S.t) P.Node.Map.t
-end
+module Make_solver (P: Problem) : Solver
+  with type t := P.t
+   and module S := P.S
+   and module Node := P.Node
 
-module Make_kill_gen_solver (P: KillGenProblem) : sig
-  (* Functor to build a solver for a kill-gen problem. *)
-  val solve : P.t -> (P.K.S.t * P.K.S.t) P.Node.Map.t
-end
+module Make_kill_gen_solver (P: Semigroup_action_problem) : Solver
+  with type t := P.t
+   and module S := P.A.S
+   and module Node := P.Node
 
-module Make_forward_cfg_solver (P: CfgKillGenProblem) : sig
-  (* Functor to build a forward solver on the cfg. *)
-  val solve : P.t -> (P.K.S.t * P.K.S.t) Inst_id.Map.t
-end
+module Make_forward_cfg_solver (P: Cfg_semigroup_action_problem) : Solver
+  with type t := P.t
+   and module S := P.A.S
+   and module Node := Inst_id
 
-module Make_backward_cfg_solver (P: CfgKillGenProblem) : sig
-  (* Functor to build a backward solver on the cfg. *)
-  val solve : P.t -> (P.K.S.t * P.K.S.t) Inst_id.Map.t
-end
+module Make_backward_cfg_solver (P: Cfg_semigroup_action_problem): Solver
+  with type t := P.t
+   and module S := P.A.S
+   and module Node := Inst_id
