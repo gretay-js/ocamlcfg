@@ -9,9 +9,9 @@ end
 
 let print_solution solution =
   ID.Map.iter
-    (fun id (_, path_out) ->
+    (fun id { Ocamlcfg.Analysis.sol_out; _ } ->
       Printf.printf "%d: " id;
-      ID.Set.iter (Printf.printf " %d") path_out;
+      ID.Set.iter (Printf.printf " %d") sol_out;
       Printf.printf "\n")
     solution
 

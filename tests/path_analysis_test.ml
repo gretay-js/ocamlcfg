@@ -15,9 +15,9 @@ end
 
 let print_solution solution =
   ID.Map.iter
-    (fun id (_, path_out) ->
+    (fun id { Ocamlcfg.Analysis.sol_out; _ } ->
       print_s [%message (id: ID.t)];
-      Paths.Set.iter path_out ~f:(fun path ->
+      Paths.Set.iter sol_out ~f:(fun path ->
         print_string "  ";
         print_s [%message (path : Paths.Path.t)]))
     solution

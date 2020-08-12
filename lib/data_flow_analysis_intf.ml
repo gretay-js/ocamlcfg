@@ -45,7 +45,7 @@ module type Semigroup_action = sig
 
       The composition must satisfy the following property:
 
-      f(x, dot a b) = f(f(x, b), a)
+      f(x, dot a b) = f(f(x, a), b)
     *)
 end
 

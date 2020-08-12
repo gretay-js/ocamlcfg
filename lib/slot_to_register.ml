@@ -56,6 +56,7 @@ module AvailableSlotProblem = struct
             | None, _ -> prev)
           kg.gens
           s
+
       let dot curr prev =
         let reg_kills = RegSet.union curr.reg_kills prev.reg_kills in
         let slot_kills = Slot.Set.union curr.slot_kills prev.slot_kills in
@@ -100,7 +101,7 @@ module AvailableSlotProblem = struct
     in
     let spill r slot =
       { A.G.reg_kills = RegSet.empty;
-        slot_kills = Slot.Set.empty;
+        slot_kills = Slot.Set.singleton slot;
         gens = Slot.Map.singleton slot r }
     in
     match Inst_id.get_inst t id with
@@ -323,7 +324,8 @@ let adjust_liveness live_out inst =
             match reg_or_live with
             | Liveness.Live -> live
             | Liveness.Extended(reg, _)
-            | Liveness.ExtendedLive(reg, _) -> Reg.Set.add reg live)
+            | Liveness.ExtendedLive(reg, _) ->
+              Reg.Set.add reg live)
           live_out
       |> Reg.Set.filter
           (fun r ->
