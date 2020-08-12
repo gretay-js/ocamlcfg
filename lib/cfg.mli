@@ -67,13 +67,6 @@ val fun_name : t -> string
 
 val is_exit : basic_block -> bool
 
-(* XCR lwhite: Not clear what these [int]s are, there are no similar
-   uses of int in the interface. Maybe use a more descriptive type
-   or at least a comment to indicate what the int represents
-
-   nlicker: I have clarified the origin of the ints in the comment since a proper
-   solution is more involved *)
-
 val destroyed_at_basic : basic -> int array
 (** Returns the hardware register numbers (as defined by Reg and Proc) of the registers
     destroyed at a basic instruction. *)

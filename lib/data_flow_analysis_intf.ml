@@ -8,15 +8,6 @@ module type Semilattice = sig
   (** Least Upper Bound of two values. *)
 end
 
-(* XCR lwhite: This seems more general than Kill/Gen. What you have here is a semigroup
-     action on a semilattice.
-     I'd probably add a module type [Semigroup] and then have something
-     like:
-     {[ module type Semigroup_action = sig
-          module S : Semilattie
-          module A : Semigroup
-          val apply : S.t -> A.t -> S.t
-        end ]} *)
 module type Semigroup = sig
   type t
 
