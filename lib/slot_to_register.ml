@@ -367,6 +367,11 @@ let run cfg =
   match fixup with
   | [] -> ()
   | _ ->
+    Statistics.set ~group ~key:"size"
+      (List.fold_left
+        (fun size bb -> 1 + size + List.length bb.Cfg.body)
+        0
+        (Cfg.blocks cfg));
     let fixup_map =
       List.fold_left
         (fun acc (id, slot, fixup) ->

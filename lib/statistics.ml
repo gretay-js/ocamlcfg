@@ -19,6 +19,11 @@ let record ~file f =
       close_out oc;
       counters := old_counters)
 
+let set ~group ~key v =
+  counters := StringMap.update group (function
+    | None -> Some (StringMap.singleton key v)
+    | Some map -> Some (StringMap.update key (fun _ -> Some v) map)) !counters
+
 let inc ~group ~key =
   counters := StringMap.update group (function
     | None -> Some (StringMap.singleton key 1)
