@@ -19,9 +19,8 @@ include G
 module type Test_graph_problem = sig
   module S : Semilattice
 
-  val empty : t -> ID.t -> S.t
   val entry : t -> ID.t -> S.t
-  val f : t -> ID.t -> S.t -> S.t
+  val transfer : t -> ID.t -> S.t -> S.t
 end
 
 let graph_next t id = ID.Map.find id t
@@ -48,7 +47,7 @@ module Make_forward_graph_solver (P: Test_graph_problem) = struct
 
     type t = G.t
 
-    let entries t =
+    let entry_nodes t =
       t
       |> ID.Map.bindings
       |> List.filter_map ~f:(fun (n, _) ->
@@ -60,8 +59,7 @@ module Make_forward_graph_solver (P: Test_graph_problem) = struct
     let next = graph_next
     let prev = graph_prev
     let entry = P.entry
-    let empty = P.empty
-    let f = P.f
+    let transfer = P.transfer
   end
 
   let solve = let module M = Make_solver(T) in M.solve
@@ -74,7 +72,7 @@ module Make_backward_graph_solver (P: Test_graph_problem) = struct
 
     type t = G.t
 
-    let entries t =
+    let entry_nodes t =
       t
       |> ID.Map.bindings
       |> List.filter_map ~f:(fun (n, next) ->
@@ -86,8 +84,7 @@ module Make_backward_graph_solver (P: Test_graph_problem) = struct
     let next = graph_prev
     let prev = graph_next
     let entry = P.entry
-    let empty = P.empty
-    let f = P.f
+    let transfer = P.transfer
   end
 
   let solve = let module M = Make_solver(T) in M.solve

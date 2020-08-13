@@ -6,6 +6,9 @@ module type Semilattice = sig
 
   val lub : t -> t -> t
   (** Least Upper Bound of two values. *)
+
+  val bot : t
+  (** Bottom element, all other lattice values are greater than this. *)
 end
 
 module type Semigroup = sig
@@ -19,7 +22,7 @@ module type Semigroup_action = sig
   module S : Semilattice
   module G : Semigroup
 
-  val f : S.t -> G.t -> S.t
+  val apply : S.t -> G.t -> S.t
   (** Applies the effect onto the semilattice.
 
       The composition must satisfy the following property:
@@ -43,55 +46,75 @@ module type Problem = sig
 
   type t
 
-  (* CR lwhite: I'd probably use something like [entry_nodes] rather than
+  (* XCR lwhite: I'd probably use something like [entry_nodes] rather than
      [entries]. "entries" has other meanings e.g. the entries in a set or map, which can
      easily be confused. *)
-  val entries : t -> Node.Set.t
+  val entry_nodes : t -> Node.Set.t
 
   val next : t -> Node.t -> Node.t list
   val prev : t -> Node.t -> Node.t list
 
-  (* CR lwhite: I think that [empty] is supposed to always be the bottom element of the
+  (* XCR lwhite: I think that [empty] is supposed to always be the bottom element of the
      semilattice. i.e. lub empty x = x. So it might make more sense to put it in the
-     [Semilattice] module type without any parameters. *)
-  val empty : t -> Node.t -> S.t
+     [Semilattice] module type without any parameters.
 
+     nlicker: empty was created from the cfg and/or node IDs since in the case of
+     dominators it is the set of all nodes. I have adapted dominator_test to handle
+     this symbolically (and more efficiently). *)
   val entry : t -> Node.t -> S.t
-  val f : t -> Node.t -> S.t -> S.t
+
+  val transfer : t -> Node.t -> S.t -> S.t
 end
 
-(** Data-flow problem with semigroup actions. *)
+(** Data-flow problem with semigroup actions.
+
+    This solver is generalised for graphs with some hierarchy, where sequences of nodes
+    with a single successor can be grouped under a parent node. In this case, the solver
+    can compose the semigroup actions of the nodes to compute an action for the whole
+    group, solving the data flow problem at the group level and then computing values
+    for individual nodes.
+
+    A specific instance of this problem is on the control flow graph, where nodes are
+    instructions and parents are basic blocks.
+    *)
 module type Semigroup_action_problem = sig
   module A : Semigroup_action
 
-  (* CR lwhite: You are keeping the names very general here, but that makes it less clear
+  (* XCR lwhite: You are keeping the names very general here, but that makes it less clear
      what you are trying to do. I think it is fine to use names related to basic blocks
      and instructions, to make it clear what is going on. So I'd suggest s/Parent/Block/
-     and s/Node/Instruction/. *)
-  module Parent : Node_id
+     and s/Node/Instruction/.
 
+     nlicker: I do not really want this to be specific to basic blocks/instructions.
+     That is the goal of the Cfg_* solvers, which operate specifically on the CFG.
+     I have added some comments to clarify the constraints.
+   *)
+
+  (** Identifier for a group of nodes with single successors. *)
+  module Group : Node_id
+
+  (** Identifier for individual nodes, linking back to their parent group. *)
   module Node : sig
     include Node_id
-    val parent : t -> Parent.t
+    val parent : t -> Group.t
   end
 
   type t
 
-  val entries : t -> Parent.Set.t
+  val entry_groups : t -> Group.Set.t
 
-  val next : t -> Parent.t -> Parent.t list
-  val prev : t -> Parent.t -> Parent.t list
+  val next_group : t -> Group.t -> Group.t list
+  val prev_group : t -> Group.t -> Group.t list
 
-  val start_node : t -> Parent.t -> Node.t
+  val start_node : t -> Group.t -> Node.t
   val next_node : t -> Node.t -> Node.t option
 
-  val empty : t -> Parent.t -> A.S.t
-  val entry : t -> Parent.t -> A.S.t
+  val entry : t -> Group.t -> A.S.t
 
-  (* CR lwhite: Thanks to the rename, the name [kg] no longer
+  (* XCR lwhite: Thanks to the rename, the name [kg] no longer
      has an obvious meaning. Perhaps [transfer_function] or
      [action]? *)
-  val kg : t -> Node.t -> A.G.t
+  val action : t -> Node.t -> A.G.t
 end
 
 (** Data-flow problem explicitly for the cfg. *)
@@ -102,9 +125,9 @@ module type Cfg_semigroup_action_problem = sig
 
   val cfg : t -> Cfg.t
 
-  val empty : t -> Label.t -> A.S.t
   val entry : t -> Label.t -> A.S.t
-  val kg : t -> Inst_id.t -> A.G.t
+
+  val action : t -> Inst_id.t -> A.G.t
 end
 
 (** Solver for a data flow problem. *)

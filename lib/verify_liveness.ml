@@ -2,11 +2,13 @@ open Data_flow_analysis
 
 let reg_to_loc r = r.Reg.loc, Proc.register_class r
 
-module LocSet = struct
+module LocationSet = struct
   include Set.Make(struct
     type t = Reg.location * int
     let compare = compare
   end)
+
+  let bot = empty
 
   let lub = union
 
@@ -30,33 +32,31 @@ end
 
 module Problem = struct
   module A = struct
-    module S = LocSet
+    module S = LocationSet
 
     module G = struct
       type t =
-        { kill: LocSet.t
-        ; gen: LocSet.t
+        { kill: LocationSet.t
+        ; gen: LocationSet.t
         }
 
       let dot curr prev =
-        { kill = LocSet.union curr.kill prev.kill;
-          gen = LocSet.union curr.gen (LocSet.diff prev.gen curr.kill)
+        { kill = LocationSet.union curr.kill prev.kill;
+          gen = LocationSet.union curr.gen (LocationSet.diff prev.gen curr.kill)
         }
-
-      let f s curr = LocSet.union curr.gen (LocSet.diff s curr.kill)
     end
 
-    let f = G.f
+    let apply s action =
+      LocationSet.union action.G.gen (LocationSet.diff s action.G.kill)
   end
 
   type t = Cfg.t
 
   let cfg t = t
 
-  let entry _ _ = LocSet.empty
-  let empty _ _ = LocSet.empty
+  let entry _ _ = LocationSet.bot
 
-  let kg cfg id =
+  let action cfg id =
     let block = Cfg.get_block_exn cfg (Inst_id.parent id) in
     let is_handler =
       block.is_trap_handler && match id with
@@ -66,17 +66,17 @@ module Problem = struct
     in
     let kill_gen inst destroyed =
       let kill_inst =
-        LocSet.union
-          (LocSet.of_reg_array inst.Cfg.res)
-          (LocSet.of_reg_array (Array.map Proc.phys_reg destroyed))
+        LocationSet.union
+          (LocationSet.of_reg_array inst.Cfg.res)
+          (LocationSet.of_reg_array (Array.map Proc.phys_reg destroyed))
       in
-      let gen_inst = LocSet.of_reg_array inst.Cfg.arg in
+      let gen_inst = LocationSet.of_reg_array inst.Cfg.arg in
       let kill =
-        if is_handler then LocSet.add (reg_to_loc Proc.loc_exn_bucket) kill_inst
+        if is_handler then LocationSet.add (reg_to_loc Proc.loc_exn_bucket) kill_inst
         else kill_inst
       in
       let gen =
-        if is_handler then LocSet.remove (reg_to_loc Proc.loc_exn_bucket) gen_inst
+        if is_handler then LocationSet.remove (reg_to_loc Proc.loc_exn_bucket) gen_inst
         else gen_inst
       in
       { A.G.kill; gen }
@@ -97,16 +97,16 @@ let verify inst id ~solution =
       inst.Cfg.live
       |> Reg.Set.elements
       |> List.map reg_to_loc
-      |> LocSet.of_list
+      |> LocationSet.of_list
     in
     let live_across' =
-      LocSet.diff live_out (LocSet.of_reg_array inst.Cfg.res)
+      LocationSet.diff live_out (LocationSet.of_reg_array inst.Cfg.res)
     in
     (* In linear, some live sets are overapproximated - this is a loose check to
      * ensure that everything that is compute as live here is included in the
      * live-across set attached to each instruction.
      *)
-    if LocSet.subset live_across' live_across
+    if LocationSet.subset live_across' live_across
       then `Equal
       else `Diff(live_across, live_across')
   | exception Not_found ->
@@ -144,8 +144,8 @@ let diagnostic cfg i live live' =
   (match i with
   | `Basic b -> Cfg.print_basic fmt b
   | `Terminator t -> Cfg.print_terminator fmt t);
-  Format.fprintf fmt "\nref: %a" LocSet.print live;
-  Format.fprintf fmt "\nout: %a" LocSet.print live';
+  Format.fprintf fmt "\nref: %a" LocationSet.print live;
+  Format.fprintf fmt "\nout: %a" LocationSet.print live';
   Format.fprintf fmt "\n\n";
   Misc.fatal_error (Buffer.contents buffer)
 

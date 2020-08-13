@@ -152,9 +152,9 @@ module Analysis : sig
 
     val cfg : t -> Cfg.t
 
-    val empty : t -> Label.t -> A.S.t
     val entry : t -> Label.t -> A.S.t
-    val kg : t -> Inst_id.t -> A.G.t
+
+    val action : t -> Inst_id.t -> A.G.t
   end
 
   module Make_solver (P: Problem) : Solver

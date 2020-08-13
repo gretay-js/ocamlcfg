@@ -11,6 +11,8 @@ module Paths = struct
   type t = Set.t [@@deriving sexp, equal]
 
   let lub = Set.union
+
+  let bot = Set.empty
 end
 
 let print_solution solution =
@@ -33,9 +35,8 @@ let () =
       module S = Paths
 
       let entry _ _ = Paths.Set.singleton []
-      let empty _ _ = Paths.Set.empty
 
-      let f = paths_next
+      let transfer = paths_next
     end
   in
   let module Solver = Make_forward_graph_solver(Problem) in
@@ -47,9 +48,8 @@ let () =
       module S = Paths
 
       let entry _ _ = Paths.Set.singleton []
-      let empty _ _ = Paths.Set.empty
 
-      let f = paths_next
+      let transfer = paths_next
     end
   in
   let module Solver = Make_backward_graph_solver(Problem) in

@@ -23,7 +23,8 @@ module RegSet = Set.Make(Int)
 module SlotsInRegs = struct
   type t = (Reg.t * int) Slot.Map.t
 
-  let empty = Slot.Map.empty
+  let bot = Slot.Map.empty
+
   let equal = Slot.Map.equal (fun (_, a) (_, b) -> a = b)
 
   let lub = Slot.Map.merge (fun _ l r ->
@@ -46,7 +47,7 @@ module AvailableSlotProblem = struct
           (* Spill instruction which writes a reg to stack *)
         }
 
-      let f s kg =
+      let propagate s kg =
         Slot.Map.merge
           (fun slot gen prev ->
             match gen, prev with
@@ -60,21 +61,20 @@ module AvailableSlotProblem = struct
       let dot curr prev =
         let reg_kills = RegSet.union curr.reg_kills prev.reg_kills in
         let slot_kills = Slot.Set.union curr.slot_kills prev.slot_kills in
-        let gens = f prev.gens curr in
+        let gens = propagate prev.gens curr in
         { reg_kills; slot_kills; gens }
     end
 
-    let f = G.f
+    let apply = G.propagate
   end
 
   type t = Cfg.t
 
   let cfg t = t
 
-  let entry _ _ = SlotsInRegs.empty
-  let empty _ _ = SlotsInRegs.empty
+  let entry _ _ = SlotsInRegs.bot
 
-  let kg t id =
+  let action t id =
     let open Cfg in
     let open Reg in
     let kill res destroyed =
@@ -228,6 +228,8 @@ module FixupProblem = struct
       let lub = Slot.Map.union (fun _ l r -> Some (Liveness.lub l r))
 
       let equal = Slot.Map.equal (fun l r -> Liveness.equal l r)
+
+      let bot = Slot.Map.empty
     end
 
     module G = struct
@@ -236,7 +238,7 @@ module FixupProblem = struct
           gens: Liveness.t Slot.Map.t;
         }
 
-      let f s kg =
+      let propagate s kg =
         Slot.Map.merge
           (fun slot l r ->
             let killed = Slot.Set.mem slot kg.kills in
@@ -250,11 +252,11 @@ module FixupProblem = struct
 
       let dot curr prev =
         let kills = Slot.Set.union curr.kills prev.kills in
-        let gens = f prev.gens curr in
+        let gens = propagate prev.gens curr in
         { kills; gens }
     end
 
-    let f = G.f
+    let apply = G.propagate
   end
 
   type t =
@@ -269,9 +271,8 @@ module FixupProblem = struct
   let cfg { cfg; _ } = cfg
 
   let entry _ _ = Slot.Map.empty
-  let empty _ _ = Slot.Map.empty
 
-  let kg { cfg; fixup_map } id =
+  let action { cfg; fixup_map } id =
     let kills arr =
       arr
       |> Array.to_list
