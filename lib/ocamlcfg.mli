@@ -8,6 +8,13 @@ module Label : sig
   end
 end
 
+module Statistics : sig
+  include module type of struct
+    include Statistics
+  end
+end
+
+
 module Cfg : sig
   include module type of struct
     include Cfg_intf.S

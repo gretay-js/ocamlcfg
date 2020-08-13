@@ -343,6 +343,7 @@ let adjust_liveness live_out inst =
 
 
 let run cfg =
+  let group = Cfg.fun_name cfg in
   let solution = AvailableSlotSolver.solve cfg in
   (* Rewrite stack slots with registers if the spilled register happens to be alive. *)
   let fixup = List.fold_left
@@ -372,6 +373,7 @@ let run cfg =
           Inst_id.Map.update
             id
             (fun prev ->
+              Statistics.inc ~group ~key:"regs_forwarded";
               match prev with
               | None -> Some (Slot.Map.singleton slot fixup)
               | Some slots -> Some (Slot.Map.add slot fixup slots))
@@ -397,9 +399,11 @@ let run cfg =
                   i' :: body
                 | Extended _ ->
                   (* All uses of the slot were replaced with the register *)
+                  Statistics.inc ~group ~key:"spills_removed";
                   body)
               | [| arg |], [| res |] when arg.Reg.loc = res.Reg.loc ->
                 (* A reload was turned into a NOP - erase it. *)
+                Statistics.inc ~group ~key:"reloads_erased";
                 body
               | _ ->
                 i' :: body)

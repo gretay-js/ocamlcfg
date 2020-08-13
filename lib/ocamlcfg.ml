@@ -2,6 +2,8 @@
 
 module Label = Label
 
+module Statistics = Statistics
+
 module Cfg = struct
   include Cfg
 
