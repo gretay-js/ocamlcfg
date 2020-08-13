@@ -43,9 +43,9 @@ module Make_solver (P: Problem) = struct
         let outs_prev =
           List.map
             (fun prev ->
-              match Map.find prev solution with
-              | { sol_out; _ } -> sol_out
-              | exception Not_found -> P.S.bot)
+              match Map.find_opt prev solution with
+              | Some { sol_out; _ } -> sol_out
+              | None -> P.S.bot)
             (P.prev t n)
         in
         let sol_in =
@@ -56,22 +56,23 @@ module Make_solver (P: Problem) = struct
           | s :: ss ->
             List.fold_left P.S.lub s ss
         in
-        let sol_out = P.transfer t n sol_in in
-        match Map.find n solution with
-        | { sol_out = sol_out'; _ } when P.S.equal sol_out' sol_out ->
+        match Map.find_opt n solution with
+        | Some { sol_in = sol_in'; _ } when P.S.equal sol_in' sol_in ->
           (* XCR lwhite: Not immediately clear to me why we need
              to check that the input did not change.
 
-             nlicker: an artefact of the past - reorganised entry/empty
-             at some point and now it is no longer needed.
+             nlicker: transfer does not need to be injective, since it's not strictly
+             monotone. I was actually mistaken initially since what we need to check
+             for is whether the input changed or not.
            *)
           fixpoint solution q
         | _
         | exception Not_found ->
+          let sol_out = P.transfer t n sol_in in
           let solution' = Map.add n { sol_in; sol_out } solution in
           fixpoint solution' (List.fold_left Q.push q (P.next t n))
     in
-    fixpoint P.Node.Map.empty q
+    fixpoint Map.empty q
 end
 
 module Make_kill_gen_solver (P: Semigroup_action_problem) = struct
