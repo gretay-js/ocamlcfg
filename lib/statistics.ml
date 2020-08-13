@@ -10,14 +10,12 @@ let record ~file f =
     ~always:(fun () ->
       let oc = open_out file in
       let fmt = Format.formatter_of_out_channel oc in
-      let pp_sep fmt () = Format.fprintf fmt "\n" in
-      Format.fprintf fmt "(";
-      Format.pp_print_list ~pp_sep (fun fmt (group, key_val) ->
-        Format.fprintf fmt "(%s (" group;
-        Format.pp_print_list ~pp_sep (fun fmt (key, v) ->
-          Format.fprintf fmt "(%s %d)" key v) fmt (StringMap.bindings key_val);
-        Format.fprintf fmt ")") fmt (StringMap.bindings !counters);
-      Format.fprintf fmt ")";
+      StringMap.iter
+        (fun group key_val ->
+          StringMap.iter
+            (fun key v -> Format.fprintf fmt "%s.%s: %d\n" group key v)
+            key_val)
+        !counters;
       close_out oc;
       counters := old_counters)
 
