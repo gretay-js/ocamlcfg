@@ -59,3 +59,7 @@ let get_predecessors_of_inst cfg = function
     get_preceding_terminators cfg block
   | Inst (block, n) ->
     [Inst (block, n - 1)]
+
+let print fmt = function
+  | Term block -> Format.fprintf fmt "(%d:term)" block
+  | Inst(block, idx) -> Format.fprintf fmt "(%d:%d)" block idx

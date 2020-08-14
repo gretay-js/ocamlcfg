@@ -47,6 +47,8 @@ module Passes = struct
   let slot_to_register = Slot_to_register.run
 
   let verify_liveness = Verify_liveness.run
+
+  let spill_reload_sink = Spill_reload_sink.run
 end
 
 module Util = struct
