@@ -2,7 +2,7 @@ open Data_flow_analysis
 
 
 
-module ReachingSpillProblem = struct
+module Reaching_spills_problem = struct
   module A = struct
     module S = struct
       type t = Inst_id.Set.t Stack_slot.Map.t
@@ -58,7 +58,55 @@ module ReachingSpillProblem = struct
     | `Basic i -> kill_gen i.res
 end
 
-module ReachingSpillSolver = Make_forward_cfg_solver(ReachingSpillProblem)
+module Reaching_spills_solver = Make_forward_cfg_solver(Reaching_spills_problem)
+
+module RegMap = Map.Make(Int)
+
+module Motion_action = struct
+  module S = struct
+    type t = Inst_id.t RegMap.t Stack_slot.Map.t
+
+    let bot = Stack_slot.Map.empty
+
+    let lub _ _ = failwith "lub"
+
+    let equal _ _ = failwith "equal"
+  end
+
+  module G = struct
+    type t = unit
+
+    let dot _ _ = failwith "dot"
+  end
+
+  let apply _s _kg = failwith "apply"
+end
+
+
+module type Motion_limit = sig
+
+end
+
+module Make_motion_problem (P: Motion_limit) = struct
+  module A = Motion_action
+
+  type t = Cfg.t
+
+  let cfg t = t
+
+  let entry _ _ = failwith "entry"
+
+  let action _t _id = failwith "action"
+end
+
+module Spill_motion_range_solver = Make_forward_cfg_solver(Make_motion_problem(struct
+
+end))
+
+module Reload_motion_range_solver = Make_forward_cfg_solver(Make_motion_problem(struct
+
+end))
+
 
 let is_move inst =
   match inst.Cfg.desc with
@@ -81,7 +129,7 @@ let sink cfg spill_id reload_id =
 
 let run cfg =
   (* Find spills which are paired to a single reload. *)
-  let solution = ReachingSpillSolver.solve cfg in
+  let solution = Reaching_spills_solver.solve cfg in
   let spills_to_reloads, reloads_to_spills =
     List.fold_left
       (fun acc block ->

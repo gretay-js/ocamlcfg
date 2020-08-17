@@ -8,7 +8,7 @@ val at_terminator : Label.t -> t
 val at_instruction : Label.t -> int -> t
 
 val compare : t -> t -> int
-val equal : t - >t -> bool
+val equal : t -> t -> bool
 
 val parent : t -> Label.t
 
