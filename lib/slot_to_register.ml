@@ -181,25 +181,6 @@ module Liveness = struct
     | ExtendedLive _, Live -> false
     | ExtendedLive _, Extended _ -> false
     | ExtendedLive(_, a'), ExtendedLive(_, b') -> a' = b'
-
-  let f a b =
-    match a, b with
-    | Live, Live ->
-      b
-    | Live, Extended(reg, r) ->
-      ExtendedLive(reg, r)
-    | Live, ExtendedLive _ ->
-      b
-    | Extended(reg, r), Live ->
-      ExtendedLive(reg, r)
-    | Extended(_, a'), Extended(_, b')
-    | Extended(_, a'), ExtendedLive(_, b') ->
-      assert (a' = b'); b
-    | ExtendedLive _, Live ->
-      a
-    | ExtendedLive(_, a'), Extended(_, b')
-    | ExtendedLive(_, a'), ExtendedLive(_, b') ->
-      assert (a' = b'); a
 end
 
 module FixupProblem = struct
@@ -225,7 +206,7 @@ module FixupProblem = struct
           (fun slot l r ->
             let killed = Stack_slot.Set.mem slot kg.kills in
             match l, r with
-            | Some l', Some r' when not killed -> Some (Liveness.f l' r')
+            | Some l', Some r' when not killed -> Some (Liveness.lub l' r')
             | _, Some _ -> r
             | _, None when killed -> None
             | _, None -> l)
