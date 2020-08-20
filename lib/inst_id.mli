@@ -27,5 +27,8 @@ val get_basic : Cfg.t -> t -> Cfg.basic Cfg.instruction
 (* Returns all the predecessors of an instruction. *)
 val get_predecessors_of_inst : Cfg.t -> t -> t list
 
+(* Returns all the successors of an instruction. *)
+val get_successors_of_inst : Cfg.t -> t -> t list
+
 (* Printer method *)
 val print : Format.formatter -> t -> unit

@@ -2,33 +2,18 @@ open Core
 open Test_graph
 
 module Dom = struct
-  type t =
-    | Bot
-    | Val of ID.Set.t
-
-  let bot = Bot
-
-  let lub a b =
-    match a, b with
-    | Bot, _ -> b
-    | Val _, Bot -> a
-    | Val a', Val b' -> Val (ID.Set.inter a' b')
-
-  let equal a b =
-    match a, b with
-    | Val a', Val b' -> ID.Set.equal a' b'
-    | Val _, Bot -> false
-    | Bot, Val _ -> false
-    | Bot, Bot -> true
+  include Ocamlcfg.Full_set.Make(ID)
+  let bot = full
+  let lub = inter
 end
 
 let print_solution solution =
   ID.Map.iter
     (fun id { Ocamlcfg.Analysis.sol_out; _ } ->
       Printf.printf "%d: " id;
-      (match sol_out with
-      | Dom.Val sol -> ID.Set.iter (Printf.printf " %d") sol;
-      | Dom.Bot -> Printf.printf "unreachable");
+      (match Dom.to_set sol_out with
+      | Some sol -> Dom.Set.iter (Printf.printf " %d") sol;
+      | None -> Printf.printf "unreachable");
       Printf.printf "\n")
     solution
 
@@ -37,12 +22,9 @@ let () =
     module DominatorsProblem = struct
       module S = Dom
 
-      let entry _ node = Dom.Val (ID.Set.singleton node)
+      let entry _ node = Dom.singleton node
 
-      let transfer _cfg v val_in =
-        match val_in with
-        | Dom.Bot -> Dom.Bot
-        | Dom.Val val_in' -> Dom.Val (ID.Set.add v val_in')
+      let transfer _cfg node doms_in = Dom.add node doms_in
     end
   in
   let module Solver = Make_forward_graph_solver(DominatorsProblem) in

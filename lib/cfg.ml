@@ -226,7 +226,17 @@ let print_op oc = function
   | Divf -> Format.fprintf oc "divf"
   | Floatofint -> Format.fprintf oc "floattoint"
   | Intoffloat -> Format.fprintf oc "intoffloat"
-  | Specific _ -> Format.fprintf oc "specific"
+  | Specific op ->
+    Format.fprintf oc "specific %s" Arch.(match op with
+      | Ilea _ -> "lea"
+      | Istore_int _ -> "store_int"
+      | Ioffset_loc _ -> "offset_loc"
+      | Ifloatarithmem _ -> "floatarithmem"
+      | Ibswap _ -> "bswap"
+      | Isqrtf -> "sqrtf"
+      | Ifloatsqrtf _ -> "floatsqrtf"
+      | Isextend32 -> "sextend32"
+      | Izextend32 -> "zextend32")
   | Probe { name; handler_code_sym } ->
       Format.fprintf oc "probe %s %s" name handler_code_sym
   | Probe_is_enabled { name } -> Format.fprintf oc "probe_is_enabled %s" name

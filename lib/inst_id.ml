@@ -66,6 +66,20 @@ let get_predecessors_of_inst cfg = function
   | Inst (block, n) ->
     [Inst (block, n - 1)]
 
+let get_successors_of_inst cfg = function
+  | Inst(block, n) ->
+    let bb = Cfg.get_block_exn cfg block in
+    [if List.length bb.body = n + 1 then Term(block) else Inst(block, n + 1)]
+  | Term block ->
+    Cfg.get_block_exn cfg block
+    |> Cfg.successor_labels cfg ~normal:true ~exn:true
+    |> Label.Set.elements
+    |> List.map (fun succ_block ->
+      let succ_bb = Cfg.get_block_exn cfg succ_block in
+      match succ_bb.body with
+      | [] -> Term(succ_block)
+      | _ -> Inst(succ_block, 0))
+
 let print fmt = function
   | Term block -> Format.fprintf fmt "(%d:term)" block
   | Inst(block, idx) -> Format.fprintf fmt "(%d:%d)" block idx

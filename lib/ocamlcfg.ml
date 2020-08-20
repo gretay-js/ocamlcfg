@@ -4,6 +4,8 @@ module Label = Label
 
 module Statistics = Statistics
 
+module Full_set = Full_set
+
 module Cfg = struct
   include Cfg
 

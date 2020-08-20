@@ -14,6 +14,11 @@ module Statistics : sig
   end
 end
 
+module Full_set : sig
+  include module type of struct
+    include Full_set
+  end
+end
 
 module Cfg : sig
   include module type of struct
