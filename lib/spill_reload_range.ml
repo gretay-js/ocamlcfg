@@ -189,14 +189,16 @@ let ids_to_sets t =
       { sol_in = Range.to_id_set sol_in; sol_out = Range.to_id_set sol_out })
     t
 
-module Spill_sink_solver = struct
-  include Make_forward_cfg_solver(Make_range_problem(struct let kind = `Spill end))
+type t = Inst_id.Set.t Data_flow_analysis.solution Inst_id.Map.t
 
-  let solve t = ids_to_sets (solve t)
-end
+let solve_spills t =
+  let module S =
+    Make_forward_cfg_solver(Make_range_problem(struct let kind = `Spill end))
+  in
+  ids_to_sets (S.solve t)
 
-module Reload_hoist_solver = struct
-  include Make_backward_cfg_solver(Make_range_problem(struct let kind = `Reload end))
-
-  let solve t = ids_to_sets (solve t)
-end
+let solve_reloads t =
+  let module S =
+    Make_backward_cfg_solver(Make_range_problem(struct let kind = `Reload end))
+  in
+  ids_to_sets (S.solve t)

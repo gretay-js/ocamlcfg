@@ -1,9 +1,6 @@
 
+type t = Inst_id.Set.t Data_flow_analysis.solution Inst_id.Map.t
 
-module Spill_sink_solver : sig
-  val solve : Cfg.t -> Inst_id.Set.t Data_flow_analysis.solution Inst_id.Map.t
-end
+val solve_spills : Cfg.t -> t
 
-module Reload_hoist_solver : sig
-  val solve : Cfg.t -> Inst_id.Set.t Data_flow_analysis.solution Inst_id.Map.t
-end
+val solve_reloads : Cfg.t -> t
