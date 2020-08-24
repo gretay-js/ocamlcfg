@@ -20,6 +20,10 @@ module Full_set : sig
   end
 end
 
+module Scc : sig
+  include Scc_intf.S
+end
+
 module Cfg : sig
   include module type of struct
     include Cfg_intf.S

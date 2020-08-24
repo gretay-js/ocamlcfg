@@ -150,23 +150,27 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
     Label.Map.mapi
       (fun block info ->
         let successors =
-          Cfg.successor_labels cfg ~normal:true ~exn:true info.bb
-            |> Label.Set.elements
-            |> List.filter_map (fun target ->
-              match Label.Map.find target block_meets with
-              | pred_info ->
-                Some { Edge.target; meet = info.reload_before && pred_info.spill_after }
-              | exception Not_found -> None)
-            |> Edge.Set.of_list
+          if Label.equal block (Inst_id.parent reload) then Edge.Set.empty
+          else
+            Cfg.successor_labels cfg ~normal:true ~exn:true info.bb
+              |> Label.Set.elements
+              |> List.filter_map (fun target ->
+                match Label.Map.find target block_meets with
+                | pred_info ->
+                  Some { Edge.target; meet = info.reload_before && pred_info.spill_after }
+                | exception Not_found -> None)
+              |> Edge.Set.of_list
         in
         let predecessors =
-          Cfg.predecessor_labels info.bb
-            |> List.filter_map (fun target ->
-              match Label.Map.find target block_meets with
-              | succ_info ->
-                Some { Edge.target; meet = info.spill_after && succ_info.reload_before }
-              | exception Not_found -> None)
-            |> Edge.Set.of_list
+          if Label.equal block (Inst_id.parent spill) then Edge.Set.empty
+          else
+            Cfg.predecessor_labels info.bb
+              |> List.filter_map (fun target ->
+                match Label.Map.find target block_meets with
+                | succ_info ->
+                  Some { Edge.target; meet = info.spill_after && succ_info.reload_before }
+                | exception Not_found -> None)
+              |> Edge.Set.of_list
         in
         { Node.block; meet = info.meet; predecessors; successors })
       block_meets
@@ -226,6 +230,26 @@ let split_points t =
     Label.Map.bindings t.graph |> List.map fst |> Label.Set.of_list
   in
   Label.Set.diff all_nodes reach_up_down
+
+let sccs { graph; spill; _ } =
+  let module Scc_problem =
+    struct
+      type t = { graph: Node.t Label.Map.t; entry: Label.t }
+
+      let entries { entry; _ } = Label.Set.singleton entry
+
+      let next { graph; _ } node =
+        let info = Label.Map.find node graph in
+        info.successors
+          |> Edge.Set.elements
+          |> List.map (fun { Edge.target; _ } -> target)
+          |> Label.Set.of_list
+
+      module Node = Label
+    end
+  in
+  let module Scc_solver = Scc.Make_solver(Scc_problem) in
+  Scc_solver.solve { Scc_problem.graph; entry = Inst_id.parent spill }
 
 let print fmt { graph; spill; reload } =
   Format.fprintf fmt "Meet_graph between %a -> %a:\n"

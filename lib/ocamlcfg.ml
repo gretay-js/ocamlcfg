@@ -6,6 +6,8 @@ module Statistics = Statistics
 
 module Full_set = Full_set
 
+module Scc = Scc
+
 module Cfg = struct
   include Cfg
 

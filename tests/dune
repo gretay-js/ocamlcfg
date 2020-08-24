@@ -16,3 +16,9 @@
   (modules dominator_test)
   (libraries test_graph)
   (preprocess (pps ppx_jane)))
+
+(test
+  (name scc_test)
+  (modules scc_test)
+  (libraries core ocamlcfg)
+  (preprocess (pps ppx_jane)))

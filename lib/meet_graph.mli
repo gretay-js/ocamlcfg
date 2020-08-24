@@ -21,5 +21,8 @@ val meet_points : t -> meet_point list
 val split_points : t -> Label.Set.t
 (** Finds basic blocks which are not on meeting paths. *)
 
+val sccs : t -> Label.Set.t list
+(** Enumerate all strongly connected components. *)
+
 val print : Format.formatter -> t -> unit
 (** Prints the graph. *)

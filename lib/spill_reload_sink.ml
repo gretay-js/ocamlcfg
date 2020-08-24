@@ -9,20 +9,6 @@ let is_move inst =
     true
   | _ ->
     false
-
-module Meet_point = struct
-  type t
-    = Before
-    | After
-    | Anywhere
-    | Nowhere
-end
-
-let blocks_of_insts insts =
-  insts
-  |> Inst_id.Set.elements
-  |> List.map Inst_id.parent
-  |> Label.Set.of_list
 *)
 
 let find_dominators doms spill blocks =
