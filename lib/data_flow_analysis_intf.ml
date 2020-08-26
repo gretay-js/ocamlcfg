@@ -189,4 +189,8 @@ module type S = sig
      and module S := P.A.S
      and module Node := Inst_id
 
+  module Make_backward_noexn_cfg_solver (P: Cfg_semigroup_action_problem): Solver
+    with type t := P.t
+     and module S := P.A.S
+     and module Node := Inst_id
 end

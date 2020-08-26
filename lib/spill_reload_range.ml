@@ -8,57 +8,86 @@ module Range = struct
   (** If [id, reg, slot] is in this map at a program point, it means that the
       instruction is a spill or a reload operating on the reg-slot pair and it
       can be moved without conflict to this program point. *)
-  type t = Inst_id.Set.t RegMap.t Stack_slot.Map.t
+  type t =
+    | Unknown
+    | Exit
+    | Set of Inst_id.Set.t RegMap.t Stack_slot.Map.t
 
-  let bot = Stack_slot.Map.empty
+  let bot = Unknown
 
-  (* An instruction can be hoisted into a join point if it is available on any path. *)
-  let lub = Stack_slot.Map.merge
-    (fun _ regs_a regs_b ->
-      match regs_a, regs_b with
-      | Some regs_a, Some regs_b ->
-        let live_regs =
-          RegMap.merge
-            (fun _ insts_a insts_b ->
-              match insts_a, insts_b with
-              | Some insts_a, Some insts_b ->
-                let live_insts = Inst_id.Set.inter insts_a insts_b in
-                if Inst_id.Set.is_empty live_insts then None else Some live_insts
-              | _ -> None)
-          regs_a
-          regs_b
-        in
-        if RegMap.is_empty live_regs then None else Some live_regs
-      | _ -> None)
+  (* An instruction can be hoisted into a join point if it is available on all paths. *)
+  let lub a b =
+    match a, b with
+    | Unknown, (Unknown | Exit | Set _) -> b
+    | (Exit | Set _), Unknown -> a
+    | Exit, Exit -> Exit
+    | Set _, Exit -> a
+    | Exit, Set _ -> b
+    | Set map_a, Set map_b ->
+      Set (Stack_slot.Map.merge
+        (fun _ regs_a regs_b ->
+          match regs_a, regs_b with
+          | Some regs_a, Some regs_b ->
+            let live_regs =
+              RegMap.merge
+                (fun _ insts_a insts_b ->
+                  match insts_a, insts_b with
+                  | Some insts_a, Some insts_b ->
+                    let live_insts = Inst_id.Set.inter insts_a insts_b in
+                    if Inst_id.Set.is_empty live_insts then None else Some live_insts
+                  | _ -> None)
+              regs_a
+              regs_b
+            in
+            if RegMap.is_empty live_regs then None else Some live_regs
+          | _ -> None)
+        map_a
+        map_b)
 
-  let equal = Stack_slot.Map.equal (RegMap.equal Inst_id.Set.equal)
+  let equal a b =
+    match a, b with
+    | Unknown, Unknown -> true
+    | Unknown, (Exit | Set _) -> false
+    | Exit, Exit -> true
+    | Exit, (Unknown | Set _) -> false
+    | Set map_a, Set map_b ->
+      Stack_slot.Map.equal (RegMap.equal Inst_id.Set.equal) map_a map_b
+    | Set _, (Unknown | Exit) -> false
 
-  let _print fmt t =
-    let insts =
-      Stack_slot.Map.fold
-        (fun slot regs acc ->
-          RegMap.fold
-            (fun reg insts acc->
-              Inst_id.Set.fold (fun id acc -> (slot, reg, id) :: acc) insts acc)
-            regs
-            acc)
-        t
-        []
-    in
-    Format.fprintf fmt "[";
-    Format.pp_print_list
-      ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
-      (fun fmt (slot, reg, id) ->
-        Format.fprintf fmt "(%a,%d,%a)" Stack_slot.print slot reg Inst_id.print id)
-      fmt
-      insts;
-    Format.fprintf fmt "]"
+  let _print fmt = function
+    | Unknown ->
+      Format.fprintf fmt "unknown"
+    | Exit ->
+      Format.fprintf fmt "exit"
+    | Set t ->
+      let insts =
+        Stack_slot.Map.fold
+          (fun slot regs acc ->
+            RegMap.fold
+              (fun reg insts acc->
+                Inst_id.Set.fold (fun id acc -> (slot, reg, id) :: acc) insts acc)
+              regs
+              acc)
+          t
+          []
+      in
+      Format.fprintf fmt "[";
+      Format.pp_print_list
+        ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+        (fun fmt (slot, reg, id) ->
+          Format.fprintf fmt "(%a,%d,%a)" Stack_slot.print slot reg Inst_id.print id)
+        fmt
+        insts;
+      Format.fprintf fmt "]"
 
   let to_id_set t =
-    Stack_slot.Map.fold
-      (fun _ -> RegMap.fold (fun _  -> Inst_id.Set.fold Inst_id.Set.add))
-      t
-      Inst_id.Set.empty
+    match t with
+    | Unknown | Exit -> Inst_id.Set.empty
+    | Set t ->
+      Stack_slot.Map.fold
+        (fun _ -> RegMap.fold (fun _  -> Inst_id.Set.fold Inst_id.Set.add))
+        t
+        Inst_id.Set.empty
 end
 
 module Range_action = struct
@@ -70,7 +99,7 @@ module Range_action = struct
       ; slot_kills: Stack_slot.Set.t
       }
 
-    let apply s kg =
+    let apply_set s kg =
       Stack_slot.Map.merge
         (fun slot regs_gen regs_s ->
           let live_regs_s =
@@ -94,10 +123,16 @@ module Range_action = struct
         kg.gens
         s
 
+    let apply s kg =
+      match s with
+      | Range.Unknown -> s
+      | Range.Exit -> Range.Set kg.gens
+      | Range.Set s -> Range.Set (apply_set s kg)
+
     let dot curr prev =
       let reg_kills = RegSet.union curr.reg_kills prev.reg_kills in
       let slot_kills = Stack_slot.Set.union curr.slot_kills prev.slot_kills in
-      let gens = apply prev.gens curr in
+      let gens = apply_set prev.gens curr in
       { gens; reg_kills; slot_kills }
   end
 
@@ -115,7 +150,7 @@ module Make_range_problem (P: Range_kind) = struct
 
   let cfg t = t
 
-  let entry _ _ = A.S.bot
+  let entry _ _ = Range.Exit
 
   let action t id =
     let open Cfg in

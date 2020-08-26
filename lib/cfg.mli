@@ -67,6 +67,8 @@ val fun_name : t -> string
 
 val is_exit : basic_block -> bool
 
+val is_exit_noexn : basic_block -> bool
+
 val destroyed_at_basic : basic -> int array
 (** Returns the hardware register numbers (as defined by Reg and Proc) of the registers
     destroyed at a basic instruction. *)
@@ -79,6 +81,8 @@ val destroyed_at_terminator : terminator -> int array
 val entry_label : t -> Label.t
 
 val exit_labels : t -> Label.Set.t
+
+val exit_labels_noexn : t -> Label.Set.t
 
 val fun_tailrec_entry_point_label : t -> Label.t
 

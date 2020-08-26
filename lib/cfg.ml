@@ -154,13 +154,35 @@ let is_exit block =
   | Raise _ ->
     block.can_raise_interproc
 
+let is_exit_noexn block =
+  match block.terminator.desc with
+  | Never
+  | Return
+  | Tailcall (Func _) ->
+    true
+  | Tailcall (Self _)
+  | Always _
+  | Parity_test _
+  | Truth_test _
+  | Float_test _
+  | Int_test _
+  | Switch _
+  | Call _ ->
+    false
+  | Raise _ ->
+    block.can_raise_interproc
+
 let entry_label t = t.entry_label
 
-let exit_labels t =
+let filter_labels t f =
   Label.Tbl.to_list t.blocks
-  |> List.filter (fun (_, block) -> is_exit block)
+  |> List.filter (fun (_, block) -> f block)
   |> List.map fst
   |> Label.Set.of_list
+
+let exit_labels t = filter_labels t is_exit
+
+let exit_labels_noexn t = filter_labels t is_exit_noexn
 
 let fun_tailrec_entry_point_label t = t.fun_tailrec_entry_point_label
 

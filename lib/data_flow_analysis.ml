@@ -195,37 +195,51 @@ module Make_forward_cfg_solver (P: Cfg_semigroup_action_problem) = struct
   let solve = let module M = Make_kill_gen_solver(T) in M.solve
 end
 
+module Make_backward_cfg_problem (P: Cfg_semigroup_action_problem) = struct
+  module S = P.A.S
+  module A = P.A
+
+  module Group = Label
+  module Node = Inst_id
+
+  type t = P.t
+
+  let next_group t id = cfg_prev (P.cfg t) id
+  let prev_group t id = cfg_next (P.cfg t) id
+
+  let start_node _ block =
+    Inst_id.Term block
+
+  let next_node t = function
+    | Inst_id.Term block ->
+      let bb = Cfg.get_block_exn (P.cfg t) block in
+      (match bb.body with
+      | [] -> None
+      | insts -> Some (Inst_id.Inst (block, List.length insts - 1)))
+    | Inst_id.Inst (_, 0) ->
+      None
+    | Inst_id.Inst (block, n) ->
+      Some (Inst_id.Inst (block, n - 1))
+
+  let entry = P.entry
+  let action = P.action
+end
+
 module Make_backward_cfg_solver (P: Cfg_semigroup_action_problem) = struct
   module T = struct
-    module S = P.A.S
-    module A = P.A
-
-    module Group = Label
-    module Node = Inst_id
-
-    type t = P.t
+    include Make_backward_cfg_problem(P)
 
     let entry_groups t = P.cfg t |> Cfg.exit_labels
+  end
 
-    let next_group t id = cfg_prev (P.cfg t) id
-    let prev_group t id = cfg_next (P.cfg t) id
+  let solve = let module M = Make_kill_gen_solver(T) in M.solve
+end
 
-    let start_node _ block =
-      Inst_id.Term block
+module Make_backward_noexn_cfg_solver (P: Cfg_semigroup_action_problem) = struct
+  module T = struct
+    include Make_backward_cfg_problem(P)
 
-    let next_node t = function
-      | Inst_id.Term block ->
-        let bb = Cfg.get_block_exn (P.cfg t) block in
-        (match bb.body with
-        | [] -> None
-        | insts -> Some (Inst_id.Inst (block, List.length insts - 1)))
-      | Inst_id.Inst (_, 0) ->
-        None
-      | Inst_id.Inst (block, n) ->
-        Some (Inst_id.Inst (block, n - 1))
-
-    let entry = P.entry
-    let action = P.action
+    let entry_groups t = P.cfg t |> Cfg.exit_labels_noexn
   end
 
   let solve = let module M = Make_kill_gen_solver(T) in M.solve

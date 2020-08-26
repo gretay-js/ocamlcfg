@@ -1,10 +1,16 @@
 type t
 
-type meet_point =
-  | Before of Inst_id.t
-  | After of Inst_id.t
-  | Anywhere of Inst_id.t
-  | Edge of Label.t * Label.t
+module Meet_point : sig
+  type loc = Before | After | Anywhere
+
+  type t =
+    | Node of Inst_id.t * loc
+    | Edge of Label.t * Label.t
+
+  val equal : t -> t -> bool
+
+  val print : Format.formatter -> t -> unit
+end
 
 val of_cfg
   :  Cfg.t
@@ -15,7 +21,7 @@ val of_cfg
   -> t
 (** Builds a graph with meeting points/edges from reaload/spill reach information. *)
 
-val meet_points : t -> meet_point list
+val meet_points : t -> Meet_point.t list
 (** Returns a list of edges/nodes where spills and reloads meet. *)
 
 val split_points : t -> Label.Set.t
@@ -23,6 +29,12 @@ val split_points : t -> Label.Set.t
 
 val sccs : t -> Label.Set.t list
 (** Enumerate all strongly connected components. *)
+
+val spill_reaches : t -> Label.t -> bool
+(** Returns true if the spill reaches the block. *)
+
+val reload_reaches : t -> Label.t -> bool
+(** Returns true if the reload reaches the block. *)
 
 val print : Format.formatter -> t -> unit
 (** Prints the graph. *)
