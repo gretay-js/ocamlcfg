@@ -49,6 +49,12 @@ let get_basic cfg = function
     let bb = Cfg.get_block_exn cfg block in
     List.nth bb.Cfg.body n
 
+let get_terminator cfg = function
+  | Term block ->
+    let bb = Cfg.get_block_exn cfg block in
+    bb.Cfg.terminator
+  | Inst _ -> raise Not_found
+
 let get_preceding_terminators cfg block =
   Cfg.get_block_exn cfg block
   |> Cfg.predecessor_labels

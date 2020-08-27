@@ -36,5 +36,8 @@ val spill_reaches : t -> Label.t -> bool
 val reload_reaches : t -> Label.t -> bool
 (** Returns true if the reload reaches the block. *)
 
+val has_node : t -> Label.t -> bool
+(** Check whether the node is on a path between the spill and the reload. *)
+
 val print : Format.formatter -> t -> unit
 (** Prints the graph. *)

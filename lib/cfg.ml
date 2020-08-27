@@ -126,12 +126,6 @@ let remove_block_exn t label =
       Misc.fatal_errorf "Cfg.remove_block_exn: block %d not found" label
   | _ -> Label.Tbl.remove t.blocks label
 
-let remove_inst_exn _t _label _id =
-  failwith "not implemented"
-
-let add_basic _t _label _id _where ~desc:_ ~arg:_ ~res:_ ~dbg:_ ~trap_depth:_ =
-  failwith "not implemented"
-
 let get_block t label = Label.Tbl.find_opt t.blocks label
 
 let get_block_exn t label =
@@ -139,6 +133,39 @@ let get_block_exn t label =
   | exception Not_found ->
       Misc.fatal_errorf "Cfg.get_block_exn: block %d not found" label
   | block -> block
+
+let remove_basic_exn t label id =
+  let block = get_block_exn t label in
+  block.body <- List.filter (fun inst -> inst.id <> id) block.body
+
+let add_basic t label id where ~desc ~arg ~res ~dbg ~trap_depth =
+  let new_id =
+    Label.Tbl.fold
+      (fun _ block new_id ->
+        List.fold_left
+          (fun new_id i -> max new_id i.id)
+          (max new_id block.terminator.id)
+          block.body)
+      t.blocks
+      0
+  in
+  let inst =
+    { desc; arg; res; dbg; live = Reg.Set.empty; trap_depth; id = new_id }
+  in
+  let block = get_block_exn t label in
+  let rec update body =
+    match body with
+    | [] ->
+      if where = `Before && id = block.terminator.id then [inst]
+      else Misc.fatal_errorf "Cfg.add_basic: missing instruction with id %d" id
+    | inst' :: body' when inst'.id = id ->
+      (match where with
+      | `Before -> inst :: inst' :: body'
+      | `After -> inst' :: inst :: body')
+    | inst' :: body' -> inst' :: update body'
+  in
+  block.body <- update block.body;
+  new_id
 
 let fun_name t = t.fun_name
 

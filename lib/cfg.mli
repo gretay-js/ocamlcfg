@@ -105,7 +105,7 @@ val mem_block : t -> Label.t -> bool
 
 val remove_block_exn : t -> Label.t -> unit
 
-val remove_inst_exn : t -> Label.t -> int -> unit
+val remove_basic_exn : t -> Label.t -> int -> unit
 
 val add_basic
   :  t

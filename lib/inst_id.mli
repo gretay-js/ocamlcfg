@@ -21,8 +21,11 @@ val get_inst
   -> t
   -> [ `Basic of Cfg.basic Cfg.instruction | `Term of Cfg.terminator Cfg.instruction]
 
-(** Returns a basic instruction located at the ID, throws Not_found if unavailable. *)
+(** Returns a basic instruction located at the ID, throws Not_found if missing. *)
 val get_basic : Cfg.t -> t -> Cfg.basic Cfg.instruction
+
+(** Returns a terminator instruction located at the ID, throws Not_found if missing. *)
+val get_terminator : Cfg.t -> t -> Cfg.terminator Cfg.instruction
 
 (* Returns all the predecessors of an instruction. *)
 val get_predecessors_of_inst : Cfg.t -> t -> t list

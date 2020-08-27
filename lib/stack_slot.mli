@@ -2,6 +2,8 @@
 (** Identifier for a stack slot. *)
 type t = { loc: int; reg_class: int }
 
+val compare : t -> t -> int
+
 module Map : Map.S with type key := t
 module Set : Set.S with type elt := t
 

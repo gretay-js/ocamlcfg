@@ -158,8 +158,129 @@ let is_move inst =
   | Cfg.Op (Cfg.Spill | Cfg.Reload | Cfg.Move) -> true
   | _ -> false
 
-let remove_spill_reload _cl _meets ~spill:_ ~spill_inst:_ ~reload:_ ~reload_inst:_ =
-  false
+module Fixed_id = struct
+  module T = struct
+    (* While Inst_id allows fast access for analyses, it is invalidated by changes to
+       the CFG. Fixed IDs identify an instruction by block label and UID instead. *)
+    type t = Label.t * int
+
+    let of_id inst_id cfg =
+      let id =
+        match Inst_id.get_inst cfg inst_id with
+        | `Basic b -> b.Cfg.id
+        | `Term t -> t.Cfg.id
+      in
+      Inst_id.parent inst_id, id
+
+    let compare (_, a) (_, b) = a - b
+  end
+
+  include T
+  module Map = Map.Make(T)
+end
+
+let insert_meets cl g meets ~arg ~res =
+  let open Meet_point in
+  let cfg = CL.cfg cl in
+  (* Find placement points inside blocks or on edges. *)
+  let placements =
+    meets
+    |> List.map (fun meet ->
+        match meet with
+        | Node(inst_id, loc) ->
+          (match inst_id, loc with
+          | (Inst_id.Inst _ | Inst_id.Term _), (Before|Anywhere) ->
+            [ `Before_inst(inst_id) ]
+          | Inst_id.Inst _, After ->
+            [ `After_inst(inst_id) ]
+          | Inst_id.Term st, After ->
+            let bb = Cfg.get_block_exn cfg st in
+            let edge_of_label l =
+              if Meet_graph.has_node g l then [`Edge(st, l)] else []
+            in
+            let edges_of_set labels =
+              labels
+              |> Label.Set.elements
+              |> List.map edge_of_label
+              |> List.flatten
+            in
+            (match (Inst_id.get_terminator cfg inst_id).Cfg.desc with
+            | Tailcall (Self _) -> [`Fail]
+            | Never -> []
+            | Always l -> edge_of_label l
+            | Call { successor; _ } ->
+              Label.Set.singleton successor |> Label.Set.union bb.Cfg.exns |> edges_of_set
+            | Switch labels ->
+              labels |> Array.to_seq |> Label.Set.of_seq |> edges_of_set
+            | Return | Tailcall (Func _) -> [`Fail]
+            | Raise _ -> edges_of_set bb.Cfg.exns
+            | Parity_test { ifso; ifnot } | Truth_test { ifso; ifnot } ->
+              edges_of_set (Label.Set.of_list [ifso; ifnot])
+            | Float_test { lt; gt; eq; uo } ->
+              edges_of_set (Label.Set.of_list [lt; gt; eq; uo])
+            | Int_test { lt; gt; eq; imm = _; is_signed = _ } ->
+              edges_of_set (Label.Set.of_list [lt; gt; eq])))
+        | Edge(st, en) -> [`Edge(st, en)])
+    |> List.flatten
+  in
+  let edges, insts, fails =
+    let rec aggregate edges insts fails = function
+      | [] -> edges, insts, fails
+      | `Fail :: placements ->
+        aggregate edges insts true placements
+      | `After_inst id :: placements ->
+        aggregate edges (`After_inst id :: insts) fails placements
+      | `Before_inst id :: placements ->
+        aggregate edges (`Before_inst id :: insts) fails placements
+      | `Edge(st, en) :: placements ->
+        let placements =
+          List.filter
+            (function
+            | `Edge(st', en') -> st <> st' || en <> en'
+            | _ -> false)
+            placements
+        in
+        aggregate (`Edge(st, en) :: edges) insts fails placements
+    in aggregate [] [] false placements
+  in
+  match fails, edges, insts with
+  | false, [], ([]|[_])
+  | false, [_], [] ->
+    let create_move where inst_id =
+      let block = Inst_id.parent inst_id in
+      let desc = Cfg.Op Cfg.Move in
+      let dbg, trap_depth, id =
+        match Inst_id.get_inst cfg inst_id with
+        | `Term t -> t.Cfg.dbg, t.Cfg.trap_depth, t.Cfg.id
+        | `Basic b -> b.Cfg.dbg, b.Cfg.trap_depth, b.Cfg.id
+      in
+      ignore (Cfg.add_basic cfg block id where ~desc ~arg ~res ~dbg ~trap_depth)
+    in
+    List.iter
+      (fun place ->
+        match place with
+        | `Edge(_, _) -> failwith "not implemented"
+        | `Before_inst id -> create_move `Before id
+        | `After_inst id -> create_move `After id)
+      (List.append edges insts);
+    true
+  | _, _, _ ->
+    false
+
+let remove_spill_reload cl g meets ~spill ~spill_inst ~reload ~reload_inst =
+  let cfg = CL.cfg cl in
+  let arg = spill_inst.Cfg.arg in
+  let res = reload_inst.Cfg.res in
+  let spill = Fixed_id.of_id spill cfg in
+  let reload = Fixed_id.of_id reload cfg in
+  insert_meets cl g meets ~arg ~res && begin
+    let spill_block, spill_id = spill in
+    let reload_block, reload_id = reload in
+    Cfg.remove_basic_exn cfg spill_block spill_id;
+    Cfg.remove_basic_exn cfg reload_block reload_id;
+    Fix_liveness.fix cfg;
+    true
+  end
 
 let move_spill_reload _cl _meets ~spill:_ ~reload:_ ~dom:_ ~pdom:_ =
   false
@@ -180,12 +301,12 @@ let sink cl spill reload doms spills reloads =
       if same_register then begin
         (* No copies to be inserted - just extend register liveness. *)
         Statistics.inc ~group ~key:"sink_erase";
-        remove_spill_reload cl [] ~spill ~spill_inst ~reload ~reload_inst
+        remove_spill_reload cl g [] ~spill ~spill_inst ~reload ~reload_inst
       end else begin
         (* Insert copies at the optimal set of meet points. *)
         if List.length meets <= 2 then begin
           Statistics.inc ~group ~key:"sink_erase_and_move";
-          remove_spill_reload cl meets ~spill ~spill_inst ~reload ~reload_inst
+          remove_spill_reload cl g meets ~spill ~spill_inst ~reload ~reload_inst
         end else begin
           (* Too many meet points - not profitable *)
           Statistics.inc ~group ~key:"sink_erase_and_move_too_many";
@@ -292,7 +413,7 @@ let run cl =
       spills_to_reloads
       []
   in
-  if List.length candidates > 30 then ()
+  if List.length candidates > 30  || List.length (Cfg.blocks cfg) > 5 then ()
   else begin
     (* Try to sink all candidates, redoing analyses when a spill/reload was sunk. *)
     let run_analyses cl =

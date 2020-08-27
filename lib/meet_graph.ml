@@ -293,6 +293,9 @@ let reload_reaches { graph; _ } reload =
   | { Node.reload_after; _ } -> reload_after
   | exception Not_found -> false
 
+let has_node { graph; _ } node =
+  Label.Map.mem node graph
+
 let print fmt { graph; spill; reload } =
   Format.fprintf fmt "Meet_graph between %a -> %a:\n"
       Inst_id.print spill
