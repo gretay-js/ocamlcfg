@@ -1,5 +1,8 @@
 open Data_flow_analysis
 
+module CL = Cfg_with_layout
+
+
 
 let inter_sets sets =
   match sets with
@@ -155,13 +158,14 @@ let is_move inst =
   | Cfg.Op (Cfg.Spill | Cfg.Reload | Cfg.Move) -> true
   | _ -> false
 
-let remove_spill_reload _cfg _meets ~spill:_ ~reload:_ =
+let remove_spill_reload _cl _meets ~spill:_ ~spill_inst:_ ~reload:_ ~reload_inst:_ =
   false
 
-let move_spill_reload _cfg _meets ~spill:_ ~reload:_ ~dom:_ ~pdom:_ =
+let move_spill_reload _cl _meets ~spill:_ ~reload:_ ~dom:_ ~pdom:_ =
   false
 
-let sink cfg spill reload doms spills reloads =
+let sink cl spill reload doms spills reloads =
+  let cfg = CL.cfg cl in
   let group = Cfg.fun_name cfg in
   let spill_inst = Inst_id.get_basic cfg spill in
   let reload_inst = Inst_id.get_basic cfg reload in
@@ -174,14 +178,14 @@ let sink cfg spill reload doms spills reloads =
     | [] ->
       (* There is actually no need to spill - erase spill/reload, extend live range. *)
       if same_register then begin
-        (* TODO: No copies to be inserted - just extend register liveness. *)
+        (* No copies to be inserted - just extend register liveness. *)
         Statistics.inc ~group ~key:"sink_erase";
-        remove_spill_reload cfg [] ~g ~spill ~reload
+        remove_spill_reload cl [] ~spill ~spill_inst ~reload ~reload_inst
       end else begin
-        (* TODO: Insert copies at the optimal set of meet points. *)
+        (* Insert copies at the optimal set of meet points. *)
         if List.length meets <= 2 then begin
           Statistics.inc ~group ~key:"sink_erase_and_move";
-          remove_spill_reload cfg meets ~g ~spill ~reload
+          remove_spill_reload cl meets ~spill ~spill_inst ~reload ~reload_inst
         end else begin
           (* Too many meet points - not profitable *)
           Statistics.inc ~group ~key:"sink_erase_and_move_too_many";
@@ -204,32 +208,36 @@ let sink cfg spill reload doms spills reloads =
               try
                 let doms_of_st = Label.Map.find st doms in
                 let pdoms_of_en = Label.Map.find en pdoms in
-                Label.Set.mem dom doms_of_st && Label.Set.mem pdom pdoms_of_en
+                not (Label.Set.mem dom doms_of_st && Label.Set.mem pdom pdoms_of_en)
               with Not_found -> true)
             meets
         in
         (* The spill and the reload can be placed before the dom and after the pdom *)
         if same_register then begin
           (* No need to insert moves *)
-          (match meets with
-          | [] -> Statistics.inc ~group ~key:"sink_sink"
-          | _ -> Statistics.inc ~group ~key:"sink_sink_free_path");
-          move_spill_reload cfg [] ~spill ~reload ~dom ~pdom
+          Statistics.inc ~group ~key:"sink_sink_same_reg";
+          move_spill_reload cl [] ~spill ~reload ~dom ~pdom
         end else begin
-          if List.length meets <= 1 then  begin
+          match List.length meets with
+          | 0 ->
+            (* Spill and reload could be moved closer to each other. *)
+            Statistics.inc ~group ~key:"sink_sink_no_meet";
+            false
+          | 1 ->
+            (* Spill and reload moved closer, freed up a path. *)
             Statistics.inc ~group ~key:"sink_sink_and_move";
-            move_spill_reload cfg meets ~spill ~reload ~dom ~pdom
-          end else begin
+            move_spill_reload cl meets ~spill ~reload ~dom ~pdom
+          | _ ->
             (* Too many meet points - not profitable. *)
             Statistics.inc ~group ~key:"sink_sink_and_move_too_many";
             false
-          end
         end
       | _ -> false)
   end
 
-let run cfg =
+let run cl =
   (* Find spills which are paired to a single reload. *)
+  let cfg = CL.cfg cl in
   let solution = Reaching_spills.solve cfg in
   let spills_to_reloads, reloads_to_spills =
     List.fold_left
@@ -242,6 +250,7 @@ let run cfg =
               let reload_id = Inst_id.Inst(start, n) in
               (match Stack_slot.of_reg inst.Cfg.arg.(0) with
               | Some slot ->
+                Statistics.inc ~group:(Cfg.fun_name cfg) ~key:"spills";
                 (match Inst_id.Map.find reload_id solution with
                 | { sol_in; _ } ->
                   (match Stack_slot.Map.find slot sol_in with
@@ -283,14 +292,21 @@ let run cfg =
       spills_to_reloads
       []
   in
-  (* Try to sink all candidates, redoing analyses when a spill/reload was sunk. *)
-  let doms = ref (Dominators.dominators cfg) in
-  let spill_reach = ref (Spill_reload_range.solve_spills cfg) in
-  let reload_reach = ref (Spill_reload_range.solve_reloads cfg) in
-  candidates |> List.iter
-    (fun (spill_id, reload_id) ->
-      if sink cfg spill_id reload_id !doms !spill_reach !reload_reach then begin
-        doms := Dominators.dominators cfg;
-        spill_reach := Spill_reload_range.solve_spills cfg;
-        reload_reach := Spill_reload_range.solve_reloads cfg
-      end)
+  if List.length candidates > 30 then ()
+  else begin
+    (* Try to sink all candidates, redoing analyses when a spill/reload was sunk. *)
+    let run_analyses cl =
+      let cfg = CL.cfg cl in
+      let doms = Dominators.dominators cfg in
+      let sreach = Spill_reload_range.solve_spills cfg in
+      let rreach = Spill_reload_range.solve_reloads cfg in
+      (doms, sreach, rreach)
+    in
+    ignore (List.fold_left
+      (fun analyses (spill_id, reload_id) ->
+        let doms, sreach, rreach = analyses in
+        if sink cl spill_id reload_id doms sreach rreach then run_analyses cl
+        else analyses)
+      (run_analyses cl)
+      candidates)
+  end

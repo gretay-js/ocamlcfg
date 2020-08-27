@@ -114,6 +114,9 @@ let verify inst id ~solution =
     `Equal
 
 let has_live_info_inst = function
+  | Cfg.Op (Cfg.Spill | Cfg.Reload | Cfg.Move ) ->
+    (* Instructions inserted by ocamlcfg do not need and do not have liveness info. *)
+    false
   | Cfg.Op _ ->
     true
   | Cfg.Pushtrap _

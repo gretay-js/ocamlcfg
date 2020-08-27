@@ -83,11 +83,9 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
       if Label.Set.mem block acc then acc
       else
         let acc = Label.Set.add block acc in
-        if Label.equal block reload_block then acc
-        else
-          let bb = Cfg.get_block_exn cfg block in
-          let succs = Cfg.successor_labels cfg ~normal:true ~exn:true bb in
-          Label.Set.fold dfs succs acc
+        let bb = Cfg.get_block_exn cfg block in
+        let succs = Cfg.successor_labels cfg ~normal:true ~exn:true bb in
+        Label.Set.fold dfs succs acc
     in
     dfs spill_block Label.Set.empty
   in
@@ -97,10 +95,8 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
       if Label.Set.mem block acc then acc
       else
         let acc = Label.Set.add block acc in
-        if Label.equal block spill_block then acc
-        else
-          let bb = Cfg.get_block_exn cfg block in
-          List.fold_left dfs acc (Cfg.predecessor_labels bb)
+        let bb = Cfg.get_block_exn cfg block in
+        List.fold_left dfs acc (Cfg.predecessor_labels bb)
     in
     dfs Label.Set.empty reload_block
   in
@@ -253,16 +249,17 @@ let split_points t =
         let { Node.spill_before; spill_after; reload_before; reload_after; meet; _ } =
           node
         in
-        if Label.equal block (Inst_id.parent t.spill) then false
-        else if Label.equal block (Inst_id.parent t.reload) then false
-        else
-          match meet with
-          | Node.Before _ | Node.After _ | Node.Anywhere _ -> false
-          | Node.Nowhere ->
-            if not spill_before && not reload_after then true
-            else if spill_before && not spill_after then true
-            else if reload_after && not reload_before then true
-            else false)
+        match meet with
+        | Node.Before _ | Node.After _ | Node.Anywhere _ -> false
+        | Node.Nowhere when Label.equal block (Inst_id.parent t.spill) ->
+          not spill_after
+        | Node.Nowhere when Label.equal block (Inst_id.parent t.reload) ->
+          not reload_before
+        | Node.Nowhere ->
+          if not spill_before && not reload_after then true
+          else if spill_before && not spill_after then true
+          else if reload_after && not reload_before then true
+          else false)
     |> List.map fst
     |> Label.Set.of_list
 
@@ -319,4 +316,4 @@ let print fmt { graph; spill; reload } =
       Format.fprintf fmt "\n")
     fmt
     (Label.Map.bindings graph);
-  Format.pp_print_flush fmt ();
+  Format.pp_print_flush fmt ()

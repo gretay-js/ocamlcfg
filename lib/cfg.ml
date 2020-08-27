@@ -126,6 +126,12 @@ let remove_block_exn t label =
       Misc.fatal_errorf "Cfg.remove_block_exn: block %d not found" label
   | _ -> Label.Tbl.remove t.blocks label
 
+let remove_inst_exn _t _label _id =
+  failwith "not implemented"
+
+let add_basic _t _label _id _where ~desc:_ ~arg:_ ~res:_ ~dbg:_ ~trap_depth:_ =
+  failwith "not implemented"
+
 let get_block t label = Label.Tbl.find_opt t.blocks label
 
 let get_block_exn t label =

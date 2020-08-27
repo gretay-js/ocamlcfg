@@ -105,6 +105,20 @@ val mem_block : t -> Label.t -> bool
 
 val remove_block_exn : t -> Label.t -> unit
 
+val remove_inst_exn : t -> Label.t -> int -> unit
+
+val add_basic
+  :  t
+  -> Label.t
+  -> int
+  -> [ `Before | `After ]
+  -> desc:basic
+  -> arg:Reg.t array
+  -> res:Reg.t array
+  -> dbg:Debuginfo.t
+  -> trap_depth:int
+  -> int
+
 val get_block : t -> Label.t -> basic_block option
 
 val get_block_exn : t -> Label.t -> basic_block

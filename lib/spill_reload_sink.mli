@@ -1,3 +1,3 @@
 (** Sink spill/reload pairs into branches *)
 
-val run : Cfg.t -> unit
+val run : Cfg_with_layout.t -> unit

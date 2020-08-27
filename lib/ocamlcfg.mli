@@ -123,7 +123,7 @@ module Passes : sig
 
   val slot_to_register : Cfg.t -> unit
 
-  val spill_reload_sink : Cfg.t -> unit
+  val spill_reload_sink : Cfg_with_layout.t -> unit
 
   val verify_liveness : Cfg.t -> unit
 end
