@@ -14,9 +14,9 @@ end
 
 val of_cfg
   :  Cfg.t
-  -> spill:Inst_id.t
+  -> spill_inst_id:Inst_id.t
   -> spills:Spill_reload_range.t
-  -> reload:Inst_id.t
+  -> reload_inst_id:Inst_id.t
   -> reloads:Spill_reload_range.t
   -> t
 (** Builds a graph with meeting points/edges from reaload/spill reach information. *)

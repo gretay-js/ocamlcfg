@@ -21,6 +21,9 @@ val get_inst
   -> t
   -> [ `Basic of Cfg.basic Cfg.instruction | `Term of Cfg.terminator Cfg.instruction]
 
+(** Returns the ID encoded in the instruction. *)
+val get_id : Cfg.t -> t -> int
+
 (** Returns a basic instruction located at the ID, throws Not_found if missing. *)
 val get_basic : Cfg.t -> t -> Cfg.basic Cfg.instruction
 

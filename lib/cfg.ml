@@ -138,33 +138,34 @@ let remove_basic_exn t label id =
   let block = get_block_exn t label in
   block.body <- List.filter (fun inst -> inst.id <> id) block.body
 
-let add_basic t label id where ~desc ~arg ~res ~dbg ~trap_depth =
+let add_basic t label id where ~desc ~arg ~res =
   let new_id =
-    Label.Tbl.fold
+    1 + (Label.Tbl.fold
       (fun _ block new_id ->
         List.fold_left
           (fun new_id i -> max new_id i.id)
           (max new_id block.terminator.id)
           block.body)
       t.blocks
-      0
+      0)
   in
-  let inst =
+  let bb = get_block_exn t label in
+  let trap_depth = bb.terminator.trap_depth in
+  let inst dbg =
     { desc; arg; res; dbg; live = Reg.Set.empty; trap_depth; id = new_id }
   in
-  let block = get_block_exn t label in
   let rec update body =
     match body with
     | [] ->
-      if where = `Before && id = block.terminator.id then [inst]
+      if where = `Before && id = bb.terminator.id then [inst bb.terminator.dbg]
       else Misc.fatal_errorf "Cfg.add_basic: missing instruction with id %d" id
     | inst' :: body' when inst'.id = id ->
       (match where with
-      | `Before -> inst :: inst' :: body'
-      | `After -> inst' :: inst :: body')
+      | `Before -> inst (inst'.dbg) :: inst' :: body'
+      | `After -> inst' :: inst (inst'.dbg) :: body')
     | inst' :: body' -> inst' :: update body'
   in
-  block.body <- update block.body;
+  bb.body <- update bb.body;
   new_id
 
 let fun_name t = t.fun_name

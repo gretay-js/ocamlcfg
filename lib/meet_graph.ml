@@ -34,8 +34,8 @@ end
 
 type t =
   { graph: Node.t Label.Map.t
-  ; spill: Inst_id.t
-  ; reload: Inst_id.t
+  ; spill_inst_id: Inst_id.t
+  ; reload_inst_id: Inst_id.t
   }
 
 module Meet_point = struct
@@ -74,10 +74,10 @@ type block_meets =
   ; bb: Cfg.basic_block
   }
 
-let of_cfg cfg ~spill ~spills ~reload ~reloads =
-  let spill_block = Inst_id.parent spill in
-  let reload_block = Inst_id.parent reload in
-  (* Identify the set of nodes reachable from the spill. *)
+let of_cfg cfg ~spill_inst_id ~spills ~reload_inst_id ~reloads =
+  let spill_block = Inst_id.parent spill_inst_id in
+  let reload_block = Inst_id.parent reload_inst_id in
+  (* Identify the set of nodes reachable from the spill_inst_id. *)
   let reach_from_spill =
     let rec dfs block acc =
       if Label.Set.mem block acc then acc
@@ -89,7 +89,7 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
     in
     dfs spill_block Label.Set.empty
   in
-  (* Identify the set of nodes reachable from the reload on the reverse CFG. *)
+  (* Identify the set of nodes reachable from the reload_inst_id on the reverse CFG. *)
   let reach_from_reload =
     let rec dfs acc block =
       if Label.Set.mem block acc then acc
@@ -100,7 +100,7 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
     in
     dfs Label.Set.empty reload_block
   in
-  (* The set of interesting nodes on paths between the spill and the reload. *)
+  (* The set of interesting nodes on paths between the spill_inst_id and the reload_inst_id. *)
   let blocks_between = Label.Set.inter reach_from_reload reach_from_spill in
   (* Helper to compute and compose meet information for an instruction. *)
   let update_meet node meet =
@@ -114,10 +114,10 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
         let { sol_in = spills_before; sol_out = spills_after } =
           Inst_id.Map.find node spills
         in
-        let spill_before = Inst_id.Set.mem spill spills_before in
-        let spill_after = Inst_id.Set.mem spill spills_after in
-        let reload_before = Inst_id.Set.mem reload reloads_before in
-        let reload_after = Inst_id.Set.mem reload reloads_after in
+        let spill_before = Inst_id.Set.mem spill_inst_id spills_before in
+        let spill_after = Inst_id.Set.mem spill_inst_id spills_after in
+        let reload_before = Inst_id.Set.mem reload_inst_id reloads_before in
+        let reload_after = Inst_id.Set.mem reload_inst_id reloads_after in
         let before = spill_before && reload_before in
         let after = spill_after && reload_after in
         if before && after then Node.Anywhere node
@@ -144,19 +144,19 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
             let open Data_flow_analysis in
             let spill_before =
               let { sol_in; _ } = Inst_id.Map.find start_id spills in
-              Inst_id.Set.mem spill sol_in
+              Inst_id.Set.mem spill_inst_id sol_in
             in
             let spill_after =
               let { sol_out; _ } = Inst_id.Map.find end_id spills in
-              Inst_id.Set.mem spill sol_out
+              Inst_id.Set.mem spill_inst_id sol_out
             in
             let reload_before =
               let { sol_out; _ } = Inst_id.Map.find start_id reloads in
-              Inst_id.Set.mem reload sol_out
+              Inst_id.Set.mem reload_inst_id sol_out
             in
             let reload_after =
               let { sol_in; _ } = Inst_id.Map.find end_id reloads in
-              Inst_id.Set.mem reload sol_in
+              Inst_id.Set.mem reload_inst_id sol_in
             in
             let meet, _ =
               List.fold_left
@@ -183,7 +183,7 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
     Label.Map.mapi
       (fun block info ->
         let successors =
-          if Label.equal block (Inst_id.parent reload) then Edge.Set.empty
+          if Label.equal block (Inst_id.parent reload_inst_id) then Edge.Set.empty
           else
             Cfg.successor_labels cfg ~normal:true ~exn:true info.bb
               |> Label.Set.elements
@@ -195,7 +195,7 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
               |> Edge.Set.of_list
         in
         let predecessors =
-          if Label.equal block (Inst_id.parent spill) then Edge.Set.empty
+          if Label.equal block (Inst_id.parent spill_inst_id) then Edge.Set.empty
           else
             Cfg.predecessor_labels info.bb
               |> List.filter_map (fun target ->
@@ -214,7 +214,7 @@ let of_cfg cfg ~spill ~spills ~reload ~reloads =
           predecessors; successors })
       block_meets
   in
-  { graph; spill; reload }
+  { graph; spill_inst_id; reload_inst_id }
 
 let meet_points { graph; _ } =
   graph
@@ -251,9 +251,9 @@ let split_points t =
         in
         match meet with
         | Node.Before _ | Node.After _ | Node.Anywhere _ -> false
-        | Node.Nowhere when Label.equal block (Inst_id.parent t.spill) ->
+        | Node.Nowhere when Label.equal block (Inst_id.parent t.spill_inst_id) ->
           not spill_after
-        | Node.Nowhere when Label.equal block (Inst_id.parent t.reload) ->
+        | Node.Nowhere when Label.equal block (Inst_id.parent t.reload_inst_id) ->
           not reload_before
         | Node.Nowhere ->
           if not spill_before && not reload_after then true
@@ -263,7 +263,7 @@ let split_points t =
     |> List.map fst
     |> Label.Set.of_list
 
-let sccs { graph; spill; _ } =
+let sccs { graph; spill_inst_id; _ } =
   let module Scc_problem =
     struct
       type t = { graph: Node.t Label.Map.t; entry: Label.t }
@@ -281,25 +281,25 @@ let sccs { graph; spill; _ } =
     end
   in
   let module Scc_solver = Scc.Make_solver(Scc_problem) in
-  Scc_solver.solve { Scc_problem.graph; entry = Inst_id.parent spill }
+  Scc_solver.solve { Scc_problem.graph; entry = Inst_id.parent spill_inst_id }
 
-let spill_reaches { graph; _ } spill =
-  match Label.Map.find spill graph with
+let spill_reaches { graph; _ } spill_inst_id =
+  match Label.Map.find spill_inst_id graph with
   | { Node.spill_before; _ } -> spill_before
   | exception Not_found -> false
 
-let reload_reaches { graph; _ } reload =
-  match Label.Map.find reload graph with
+let reload_reaches { graph; _ } reload_inst_id =
+  match Label.Map.find reload_inst_id graph with
   | { Node.reload_after; _ } -> reload_after
   | exception Not_found -> false
 
 let has_node { graph; _ } node =
   Label.Map.mem node graph
 
-let print fmt { graph; spill; reload } =
+let print fmt { graph; spill_inst_id; reload_inst_id } =
   Format.fprintf fmt "Meet_graph between %a -> %a:\n"
-      Inst_id.print spill
-      Inst_id.print reload;
+      Inst_id.print spill_inst_id
+      Inst_id.print reload_inst_id;
   Format.pp_print_list
     ~pp_sep:(fun fmt () -> Format.fprintf fmt "\n")
     (fun fmt (block, { Node.meet; predecessors; successors; _ }) ->

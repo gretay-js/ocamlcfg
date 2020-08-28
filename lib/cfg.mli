@@ -115,8 +115,6 @@ val add_basic
   -> desc:basic
   -> arg:Reg.t array
   -> res:Reg.t array
-  -> dbg:Debuginfo.t
-  -> trap_depth:int
   -> int
 
 val get_block : t -> Label.t -> basic_block option

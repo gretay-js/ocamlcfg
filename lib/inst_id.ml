@@ -43,6 +43,11 @@ let get_inst cfg = function
     let bb = Cfg.get_block_exn cfg block in
     `Basic (List.nth bb.Cfg.body n)
 
+let get_id cfg t =
+  match get_inst cfg t with
+  | `Term t -> t.Cfg.id
+  | `Basic b -> b.Cfg.id
+
 let get_basic cfg = function
   | Term _ -> raise Not_found
   | Inst(block, n) ->
