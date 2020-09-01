@@ -22,6 +22,9 @@ val set_layout : t -> Label.t list -> unit
 (** Remove from cfg, layout, and other data-structures that track labels. *)
 val remove_block : t -> Label.t -> unit
 
+(** Split an edge, returning its new label and the ID of the terminating jump. *)
+val split_edge : t -> start_edge:Label.t -> end_edge:Label.t -> Label.t * int
+
 val is_trap_handler : t -> Label.t -> bool
 
 val save_as_dot :

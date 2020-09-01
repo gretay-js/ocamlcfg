@@ -126,6 +126,16 @@ let remove_block_exn t label =
       Misc.fatal_errorf "Cfg.remove_block_exn: block %d not found" label
   | _ -> Label.Tbl.remove t.blocks label
 
+let next_id t =
+  1 + (Label.Tbl.fold
+    (fun _ block new_id ->
+      List.fold_left
+        (fun new_id i -> max new_id i.id)
+        (max new_id block.terminator.id)
+        block.body)
+    t.blocks
+    0)
+
 let get_block t label = Label.Tbl.find_opt t.blocks label
 
 let get_block_exn t label =
@@ -134,31 +144,66 @@ let get_block_exn t label =
       Misc.fatal_errorf "Cfg.get_block_exn: block %d not found" label
   | block -> block
 
+let split_edge_exn t ~start_edge ~end_edge =
+  let start_bb = get_block_exn t start_edge in
+  let end_bb = get_block_exn t end_edge in
+  let dbg, trap_depth =
+    match end_bb.body with
+    | [] -> let t = end_bb.terminator in t.dbg, t.trap_depth
+    | b :: _ -> b.dbg, b.trap_depth
+  in
+  let terminator =
+    { desc = Always end_edge;
+      arg = [||];
+      res = [||];
+      dbg = dbg;
+      live = Reg.Set.empty;
+      trap_depth;
+      id = next_id t;
+    }
+  in
+  let start =  Cmm.new_label () in
+  let block =
+    { start;
+      body = [];
+      predecessors = Label.Set.singleton start_edge;
+      trap_depth;
+      exns = Label.Set.empty;
+      can_raise = false;
+      can_raise_interproc = false;
+      is_trap_handler = false;
+      dead = false;
+      terminator;
+    }
+  in
+  Label.Tbl.add t.blocks start block;
+  replace_successor_labels t ~normal:true ~exn:false start_bb ~f:(fun l ->
+    if Label.equal l end_edge then start else l);
+  end_bb.predecessors <- Label.Set.(end_bb.predecessors |> remove end_edge |> add start);
+  start, terminator.id
+
 let remove_basic_exn t label id =
   let block = get_block_exn t label in
   block.body <- List.filter (fun inst -> inst.id <> id) block.body
 
-let add_basic t label id where ~desc ~arg ~res =
-  let new_id =
-    1 + (Label.Tbl.fold
-      (fun _ block new_id ->
-        List.fold_left
-          (fun new_id i -> max new_id i.id)
-          (max new_id block.terminator.id)
-          block.body)
-      t.blocks
-      0)
-  in
+let create_and_add_basic t label id where ~desc ~arg ~res =
+  let new_id = next_id t in
   let bb = get_block_exn t label in
   let trap_depth = bb.terminator.trap_depth in
   let inst dbg =
+    (* TODO: trap_depth might be incorrect if a setuptrap/pushtrap is involved *)
     { desc; arg; res; dbg; live = Reg.Set.empty; trap_depth; id = new_id }
   in
   let rec update body =
     match body with
     | [] ->
       if where = `Before && id = bb.terminator.id then [inst bb.terminator.dbg]
-      else Misc.fatal_errorf "Cfg.add_basic: missing instruction with id %d" id
+      else
+        Misc.fatal_errorf
+          "Cfg.create_and_add_basic: missing instruction with id %d:%d in %s"
+          label
+          id
+          t.fun_name
     | inst' :: body' when inst'.id = id ->
       (match where with
       | `Before -> inst (inst'.dbg) :: inst' :: body'
@@ -167,6 +212,32 @@ let add_basic t label id where ~desc ~arg ~res =
   in
   bb.body <- update bb.body;
   new_id
+
+let add_basic t label id where inst =
+  let inst dbg trap_depth =
+    (* TODO: trap_depth is incorrect if there is a pushtrap inbetween *)
+    { inst with dbg; trap_depth; live = Reg.Set.empty }
+  in
+  let bb = get_block_exn t label in
+  let term = bb.terminator in
+  let rec update body =
+    match body with
+    | [] ->
+      if where = `Before && id = term.id
+        then [inst term.dbg term.trap_depth]
+        else
+          Misc.fatal_errorf
+            "Cfg.add_basic: missing instruction with id %d:%d in %s"
+            label
+            id
+            t.fun_name
+    | inst' :: body' when inst'.id = id ->
+      (match where with
+      | `Before -> inst (inst'.dbg) (inst'.trap_depth) :: inst' :: body'
+      | `After -> inst' :: inst (inst'.dbg) (inst'.trap_depth) :: body')
+    | inst' :: body' -> inst' :: update body'
+  in
+  bb.body <- update bb.body
 
 let fun_name t = t.fun_name
 

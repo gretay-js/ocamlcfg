@@ -36,6 +36,18 @@ let remove_block t label =
   t.layout <- List.filter (fun l -> not (Label.equal l label)) t.layout;
   t.new_labels <- Label.Set.remove label t.new_labels
 
+let split_edge t ~start_edge ~end_edge =
+  let label, id = Cfg.split_edge_exn t.cfg ~start_edge ~end_edge in
+  let rec add_before_end labels =
+    match labels with
+    | [] -> Misc.fatal_error "Cfg.split_edge: end edge not in layout"
+    | l :: _ when Label.equal l end_edge -> label :: labels
+    | l :: labels' -> l :: add_before_end labels'
+  in
+  t.layout <- add_before_end t.layout;
+  t.new_labels <- Label.Set.add label t.new_labels;
+  label, id
+
 let is_trap_handler t label =
   let block = Cfg.get_block_exn t.cfg label in
   block.is_trap_handler

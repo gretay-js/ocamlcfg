@@ -105,9 +105,11 @@ val mem_block : t -> Label.t -> bool
 
 val remove_block_exn : t -> Label.t -> unit
 
+val split_edge_exn : t -> start_edge:Label.t -> end_edge:Label.t -> Label.t * int
+
 val remove_basic_exn : t -> Label.t -> int -> unit
 
-val add_basic
+val create_and_add_basic
   :  t
   -> Label.t
   -> int
@@ -116,6 +118,14 @@ val add_basic
   -> arg:Reg.t array
   -> res:Reg.t array
   -> int
+
+val add_basic
+  : t
+  -> Label.t
+  -> int
+  -> [`Before | `After ]
+  -> basic instruction
+  -> unit
 
 val get_block : t -> Label.t -> basic_block option
 
