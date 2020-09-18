@@ -19,7 +19,8 @@ module S = struct
     | External of
         { func_symbol : string;
           alloc : bool;
-          label_after : Label.t
+          label_after : Label.t;
+          returns: bool
         }
     | Alloc of
         { bytes : int;

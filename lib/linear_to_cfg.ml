@@ -371,8 +371,8 @@ let to_basic (mop : Mach.operation) : C.basic =
   | Icall_ind { label_after } -> Call (F (Indirect { label_after }))
   | Icall_imm { func; label_after } ->
       Call (F (Direct { func_symbol = func; label_after }))
-  | Iextcall { func; alloc; label_after } ->
-      Call (P (External { func_symbol = func; alloc; label_after }))
+  | Iextcall { func; alloc; label_after; returns;  } ->
+    Call (P (External { func_symbol = func; alloc; label_after; returns }))
   | Iintop (Icheckbound { label_after_error; spacetime_index }) ->
       Call
         (P
