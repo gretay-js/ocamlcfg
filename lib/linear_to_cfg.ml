@@ -34,14 +34,17 @@ type t =
     interproc_handler : Label.t;
         (** A fake label that represents the top of the trap stack on entry
             to this function. *)
-    mutable unresolved_traps_to_pop : T.t list
+    mutable unresolved_traps_to_pop : T.t list;
         (** Collect trap stacks from [exns] that need to be propagated to the
             exns successors of a block, but cannot be propagated yet, because
             the top of these trap stacks is unresolved (i.e., the exns
             successor block is not known). These trap stacks will become
             resolved unless they are unreachable. *)
+    mutable next_linear_id : int;
+        (** Each Linear.instruction gets an id. *)
   }
 
+let entry_id = 1
 let create cfg =
   { cfg;
     layout = [];
@@ -50,7 +53,8 @@ let create cfg =
     trap_stacks = Label.Tbl.create 31;
     exns = Label.Tbl.create 31;
     interproc_handler = -1;
-    unresolved_traps_to_pop = []
+    unresolved_traps_to_pop = [];
+    next_linear_id = entry_id;
   }
 
 (* CR-someday gyorsh: implement CFG traversal *)
@@ -68,16 +72,12 @@ let create cfg =
    invariants are preserved, while other optimizations can be turned on and
    off. *)
 
-let entry_id = 1
-
-let last_linear_id = ref entry_id
-
-let get_new_linear_id () =
-  let id = !last_linear_id in
-  last_linear_id := id + 1;
+let get_new_linear_id t =
+  let id = t.next_linear_id in
+  t.next_linear_id <- id + 1;
   id
 
-let create_instruction desc ~trap_depth (i : Linear.instruction) :
+let create_instruction t desc ~trap_depth (i : Linear.instruction) :
     _ C.instruction =
   { desc;
     arg = i.arg;
@@ -85,7 +85,7 @@ let create_instruction desc ~trap_depth (i : Linear.instruction) :
     dbg = i.dbg;
     live = i.live;
     trap_depth;
-    id = get_new_linear_id ()
+    id = get_new_linear_id t;
   }
 
 let record_traps t label traps =
@@ -135,7 +135,7 @@ let create_empty_block t start ~trap_depth ~traps =
       dbg = Debuginfo.none;
       live = Reg.Set.empty;
       trap_depth;
-      id = get_new_linear_id ()
+      id = get_new_linear_id t
     }
   in
   let block : C.basic_block =
@@ -362,7 +362,7 @@ let add_terminator t (block : C.basic_block) (i : L.instruction)
         Misc.fatal_errorf "Linear instruction not followed by label:@ %a"
           Printlinear.instr
           { i with next = Linear.end_instr } );
-  block.terminator <- create_instruction desc ~trap_depth i;
+  block.terminator <- create_instruction t desc ~trap_depth i;
   if can_raise_terminator desc then record_exn t block traps;
   register_block t block traps
 
@@ -450,7 +450,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
          the label falls through, an explicit successor edge is added. *)
       if not (block_is_registered t block) then (
         let fallthrough : C.terminator = Always start in
-        block.terminator <- create_instruction fallthrough i ~trap_depth;
+        block.terminator <- create_instruction t fallthrough i ~trap_depth;
         register_block t block traps );
       (* CR-someday gyorsh: check for multiple consecutive labels *)
       let new_block = create_empty_block t start ~trap_depth ~traps in
@@ -532,13 +532,13 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       t.trap_handlers <- Label.Set.add lbl_handler t.trap_handlers;
       record_traps t lbl_handler traps;
       let desc = C.Pushtrap { lbl_handler } in
-      block.body <- create_instruction desc ~trap_depth i :: block.body;
+      block.body <- create_instruction t desc ~trap_depth i :: block.body;
       let trap_depth = trap_depth + 1 in
       let traps = T.push traps lbl_handler in
       create_blocks t i.next block ~trap_depth ~traps
   | Lpoptrap ->
       let desc = C.Poptrap in
-      block.body <- create_instruction desc ~trap_depth i :: block.body;
+      block.body <- create_instruction t desc ~trap_depth i :: block.body;
       let trap_depth = trap_depth - 1 in
       if trap_depth < 0 then
         Misc.fatal_error "Lpoptrap moves the trap depth below zero";
@@ -557,11 +557,11 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       create_blocks t i.next block ~trap_depth ~traps
   | Lprologue ->
       let desc = C.Prologue in
-      block.body <- create_instruction desc i ~trap_depth :: block.body;
+      block.body <- create_instruction t desc i ~trap_depth :: block.body;
       create_blocks t i.next block ~trap_depth ~traps
   | Lreloadretaddr ->
       let desc = C.Reloadretaddr in
-      block.body <- create_instruction desc i ~trap_depth :: block.body;
+      block.body <- create_instruction t desc i ~trap_depth :: block.body;
       create_blocks t i.next block ~trap_depth ~traps
   | Lop mop -> (
       match mop with
@@ -588,7 +588,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
       | Iprobe _ | Iprobe_is_enabled _ | Ispecific _ | Iname_for_debugger _
         ->
           let desc = to_basic mop in
-          block.body <- create_instruction desc i ~trap_depth :: block.body;
+          block.body <- create_instruction t desc i ~trap_depth :: block.body;
           if Mach.operation_can_raise mop then record_exn t block traps;
           create_blocks t i.next block ~trap_depth ~traps )
 
@@ -612,7 +612,6 @@ let run (f : Linear.fundecl) ~preserve_orig_labels =
   let entry_block =
     create_empty_block t t.cfg.entry_label ~trap_depth ~traps
   in
-  last_linear_id := entry_id;
   create_blocks t f.fun_body entry_block ~trap_depth ~traps;
   (* Register predecessors now rather than during cfg construction, because
      of forward jumps: the blocks do not exist when the jump that reference
