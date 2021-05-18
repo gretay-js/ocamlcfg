@@ -20,7 +20,7 @@ Copyright (c) 2019--2020 Jane Street Group LLC.
 
 
  (depends
-  (ocaml (>= 4.08))
+  (ocaml (>= 4.11))
   (dune (>= 1.8))
  )
  )
