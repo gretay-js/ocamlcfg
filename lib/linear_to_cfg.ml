@@ -83,6 +83,7 @@ let create_instruction t desc ~trap_depth (i : Linear.instruction) :
     arg = i.arg;
     res = i.res;
     dbg = i.dbg;
+    fdo = i.fdo;
     live = i.live;
     trap_depth;
     id = get_new_linear_id t;
@@ -133,6 +134,7 @@ let create_empty_block t start ~trap_depth ~traps =
       arg = [||];
       res = [||];
       dbg = Debuginfo.none;
+      fdo = Fdo_info.none;
       live = Reg.Set.empty;
       trap_depth;
       id = get_new_linear_id t
@@ -595,7 +597,7 @@ let rec create_blocks t (i : L.instruction) (block : C.basic_block)
 let run (f : Linear.fundecl) ~preserve_orig_labels =
   let t =
     let cfg =
-      Cfg.create ~fun_name:f.fun_name
+      Cfg.create ~fun_name:f.fun_name ~fun_dbg:f.fun_dbg
         ~fun_tailrec_entry_point_label:f.fun_tailrec_entry_point_label
     in
     create cfg

@@ -5,12 +5,12 @@ module L = Linear
 
 let to_linear_instr ?(like : _ Cfg.instruction option) desc ~next :
     L.instruction =
-  let arg, res, dbg, live =
+  let arg, res, dbg, live, fdo =
     match like with
-    | None -> ([||], [||], Debuginfo.none, Reg.Set.empty)
-    | Some like -> (like.arg, like.res, like.dbg, like.live)
+    | None -> ([||], [||], Debuginfo.none, Reg.Set.empty, Fdo_info.none)
+    | Some like -> (like.arg, like.res, like.dbg, like.live, like.fdo)
   in
-  { desc; next; arg; res; dbg; live }
+  { desc; next; arg; res; dbg; live; fdo }
 
 let from_basic (basic : Cfg.basic) : L.instruction_desc =
   match basic with
@@ -360,10 +360,11 @@ let print_assembly (blocks : Cfg.basic_block list) =
   let layout = List.map (fun (b : Cfg.basic_block) -> b.start) blocks in
   let fun_name = "_fun_start_" in
   let fun_tailrec_entry_point_label = 0 in
-  let cfg = Cfg.create ~fun_name ~fun_tailrec_entry_point_label in
+  let cfg = Cfg.create ~fun_name ~fun_tailrec_entry_point_label
+              ~fun_dbg:Debuginfo.none in
   List.iter
     (fun (block : Cfg.basic_block) ->
-      Label.Tbl.add cfg.blocks block.start block)
+       Label.Tbl.add cfg.blocks block.start block)
     blocks;
   let cl =
     Cfg_with_layout.create cfg ~layout ~new_labels:Label.Set.empty
