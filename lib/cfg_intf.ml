@@ -44,11 +44,6 @@ module S = struct
     | Divf
     | Floatofint
     | Intoffloat
-    | Probe of
-        { name : string;
-          handler_code_sym : string
-        }
-    | Probe_is_enabled of { name : string }
     | Specific of Arch.specific_operation
     | Name_for_debugger of
         { ident : Ident.t;
