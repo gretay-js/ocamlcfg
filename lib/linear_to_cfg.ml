@@ -382,6 +382,7 @@ let to_basic (mop : Mach.operation) : C.basic =
               { immediate = None; label_after_error; spacetime_index }))
   | Iintop
       ( ( Iadd | Isub | Imul | Imulh | Idiv | Imod | Iand | Ior | Ixor | Ilsl
+        | Ipopcnt | Iclz _ | Ictz _
         | Ilsr | Iasr | Icomp _ ) as op ) ->
       Op (Intop op)
   | Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i) ->
@@ -391,6 +392,7 @@ let to_basic (mop : Mach.operation) : C.basic =
               { immediate = Some i; label_after_error; spacetime_index }))
   | Iintop_imm
       ( ( ( Iadd | Isub | Imul | Imulh | Idiv | Imod | Iand | Ior | Ixor
+          | Ipopcnt | Iclz _ | Ictz _
           | Ilsl | Ilsr | Iasr | Icomp _ ) as op ),
         i ) ->
       Op (Intop_imm (op, i))

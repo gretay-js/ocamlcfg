@@ -176,6 +176,9 @@ let intop (op : Mach.integer_operation) =
   | Ilsl -> " << "
   | Ilsr -> " >>u "
   | Iasr -> " >>s "
+  | Ipopcnt -> " pop "
+  | Iclz _ -> " clz "
+  | Ictz _ -> " ctz "
   | Icomp cmp -> intcomp cmp
   | Icheckbound _ -> assert false
 
