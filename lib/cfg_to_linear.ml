@@ -18,25 +18,25 @@ let from_basic (basic : Cfg.basic) : L.instruction_desc =
   | Reloadretaddr -> Lreloadretaddr
   | Pushtrap { lbl_handler } -> Lpushtrap { lbl_handler }
   | Poptrap -> Lpoptrap
-  | Call (F (Indirect { label_after })) -> Lop (Icall_ind { label_after })
-  | Call (F (Direct { func_symbol; label_after })) ->
-      Lop (Icall_imm { func = func_symbol; label_after })
-  | Call (P (External { func_symbol; alloc; label_after })) ->
-      Lop (Iextcall { func = func_symbol; alloc; label_after })
+  | Call (F Indirect) -> Lop Icall_ind
+  | Call (F (Direct { func_symbol; })) ->
+      Lop (Icall_imm { func = func_symbol; })
+  | Call (P (External { func_symbol; alloc; ty_res; ty_args; })) ->
+      Lop (Iextcall { func = func_symbol; alloc; ty_res; ty_args; })
   | Call
       (P
-        (Checkbound { immediate = None; label_after_error; spacetime_index }))
+        (Checkbound { immediate = None;  }))
     ->
-      Lop (Iintop (Icheckbound { label_after_error; spacetime_index }))
+      Lop (Iintop Icheckbound)
   | Call
       (P
         (Checkbound
-          { immediate = Some i; label_after_error; spacetime_index })) ->
+          { immediate = Some i; })) ->
       Lop
-        (Iintop_imm (Icheckbound { label_after_error; spacetime_index }, i))
-  | Call (P (Alloc { bytes; label_after_call_gc; dbginfo; spacetime_index }))
+        (Iintop_imm (Icheckbound, i))
+  | Call (P (Alloc { bytes; dbginfo; }))
     ->
-      Lop (Ialloc { bytes; label_after_call_gc; dbginfo; spacetime_index })
+      Lop (Ialloc { bytes; dbginfo; })
   | Op op ->
       let op : Mach.operation =
         match op with
@@ -150,12 +150,12 @@ let linearize_terminator cfg (terminator : Cfg.terminator Cfg.instruction)
     match terminator.desc with
     | Return -> [L.Lreturn]
     | Raise kind -> [L.Lraise kind]
-    | Tailcall (Func (Indirect { label_after })) ->
-        [L.Lop (Itailcall_ind { label_after })]
-    | Tailcall (Func (Direct { func_symbol; label_after })) ->
-        [L.Lop (Itailcall_imm { func = func_symbol; label_after })]
-    | Tailcall (Self { label_after }) ->
-        [L.Lop (Itailcall_imm { func = Cfg.fun_name cfg; label_after })]
+    | Tailcall (Func Indirect) ->
+        [L.Lop Itailcall_ind]
+    | Tailcall (Func (Direct { func_symbol; })) ->
+        [L.Lop (Itailcall_imm { func = func_symbol; })]
+    | Tailcall Self ->
+        [L.Lop (Itailcall_imm { func = Cfg.fun_name cfg; })]
     | Switch labels -> [L.Lswitch labels]
     | Never -> Misc.fatal_error "Cannot linearize terminator: Never"
     | Always label -> branch_or_fallthrough label
@@ -375,7 +375,6 @@ let print_assembly (blocks : Cfg.basic_block list) =
       fun_body;
       fun_fast = false;
       fun_dbg = Debuginfo.none;
-      fun_spacetime_shape = None;
       fun_num_stack_slots = Array.make Proc.num_register_classes 0;
       fun_frame_required = false;
       fun_prologue_required = false;

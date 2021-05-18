@@ -35,7 +35,7 @@ let mem_block t label = Label.Tbl.mem t.blocks label
 
 let successor_labels_normal t ti =
   match ti.desc with
-  | Tailcall (Self _) -> Label.Set.singleton t.fun_tailrec_entry_point_label
+  | Tailcall Self -> Label.Set.singleton t.fun_tailrec_entry_point_label
   | Switch labels -> Array.to_seq labels |> Label.Set.of_seq
   | Return | Raise _ | Tailcall (Func _) -> Label.Set.empty
   | Never -> Label.Set.empty
@@ -83,7 +83,7 @@ let replace_successor_labels t ~normal ~exn block ~f =
       | Float_test { lt; eq; gt; uo } ->
           Float_test { lt = f lt; eq = f eq; gt = f gt; uo = f uo }
       | Switch labels -> Switch (Array.map f labels)
-      | Tailcall (Self _) ->
+      | Tailcall Self ->
           (* CR-someday gyorsh: If there is no [Tailcall Self] then we won't
              affect [t.fun_tailrec_entry_point_label]. Maybe this case should
              do nothing and [fun_tailrec_entry_point_label] should
@@ -175,7 +175,7 @@ let intop (op : Mach.integer_operation) =
   | Ilsr -> " >>u "
   | Iasr -> " >>s "
   | Icomp cmp -> intcomp cmp
-  | Icheckbound _ -> assert false
+  | Icheckbound -> assert false
 
 let print_op oc = function
   | Move -> Printf.fprintf oc "mov"
@@ -212,7 +212,7 @@ let print_call oc = function
       | Checkbound _ -> Printf.fprintf oc "checkbound" )
   | F func_call -> (
       match func_call with
-      | Indirect _ -> Printf.fprintf oc "indirect"
+      | Indirect -> Printf.fprintf oc "indirect"
       | Direct { func_symbol : string; _ } ->
           Printf.fprintf oc "direct %s" func_symbol )
 
@@ -263,5 +263,5 @@ let print_terminator oc ?(sep = "\n") ti =
       done
   | Return -> Printf.fprintf oc "Return%s" sep
   | Raise _ -> Printf.fprintf oc "Raise%s" sep
-  | Tailcall (Self _) -> Printf.fprintf oc "Tailcall self%s" sep
+  | Tailcall Self -> Printf.fprintf oc "Tailcall self%s" sep
   | Tailcall (Func _) -> Printf.fprintf oc "Tailcall%s" sep

@@ -5,33 +5,24 @@
 
 module S = struct
   type func_call_operation =
-    | Indirect of { label_after : Label.t }
-    | Direct of
-        { func_symbol : string;
-          label_after : Label.t
-        }
+    | Indirect
+    | Direct of { func_symbol : string; }
 
   type tail_call_operation =
-    | Self of { label_after : Label.t }
+    | Self
     | Func of func_call_operation
 
   type prim_call_operation =
     | External of
         { func_symbol : string;
+          ty_res : Cmm.machtype; ty_args : Cmm.exttype list;
           alloc : bool;
-          label_after : Label.t
         }
     | Alloc of
         { bytes : int;
-          label_after_call_gc : Label.t option;
           dbginfo : Debuginfo.alloc_dbginfo;
-          spacetime_index : int
         }
-    | Checkbound of
-        { immediate : int option;
-          label_after_error : Label.t option;
-          spacetime_index : int
-        }
+    | Checkbound of { immediate : int option; }
 
   type operation =
     | Move
