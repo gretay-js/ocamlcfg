@@ -7,7 +7,8 @@ let add_discriminator dbg file d =
      required to make ocamlfdo work. *)
   let pos = { Lexing.dummy_pos with pos_fname = file; pos_lnum = d } in
   let loc = { Location.loc_start = pos; loc_end = pos; loc_ghost = true } in
-  let scoped_loc = Debuginfo.Scoped_location.of_location ~scopes:[] loc in
+  let scopes = Debuginfo.Scoped_location.empty_scopes in
+  let scoped_loc = Debuginfo.Scoped_location.of_location ~scopes loc in
   let nd = Debuginfo.from_location scoped_loc in
   dbg @ nd
 
